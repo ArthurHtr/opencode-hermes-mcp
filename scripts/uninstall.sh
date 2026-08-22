@@ -5,8 +5,8 @@
 # mcp_servers.opencode from the Hermes config, the server credentials file.
 #
 # NEVER touched (by design): the git clone, the OpenCode provider config
-# (~/.config/opencode/opencode.json), the Unsloth secret, the OpenCode binary.
-#   --purge          also remove the OpenCode provider config + Unsloth secret
+# (~/.config/opencode/opencode.json), the API key secret, the OpenCode binary.
+#   --purge          also remove the OpenCode provider config + API key secret
 #   --purge-binary   also remove the OpenCode binary (~/.opencode/bin/opencode)
 #
 # Testing: set OPENCODE_MCP_HOME=/tmp/sandbox to redirect the targets.
@@ -33,7 +33,8 @@ Usage: uninstall.sh [options]
 
 Options:
   --purge          also remove ~/.config/opencode/opencode.json + the
-                   Unsloth secret (~/.config/opencode/secrets/unsloth-api-key)
+                    API key secret (~/.config/opencode/secrets/api-key,
+                    legacy secrets/unsloth-api-key too)
   --purge-binary   also remove the OpenCode binary (~/.opencode/bin/opencode)
   -h, --help       this help
 
@@ -146,12 +147,13 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-# 6. Optional purge: OpenCode provider config + Unsloth secret
+# 6. Optional purge: OpenCode provider config + API key secret
 # --------------------------------------------------------------------------- #
 OC_CFG="$HOME_DIR/.config/opencode/opencode.json"
-OC_SECRET="$HOME_DIR/.config/opencode/secrets/unsloth-api-key"
+OC_SECRET="$HOME_DIR/.config/opencode/secrets/api-key"
+OC_SECRET_LEGACY="$HOME_DIR/.config/opencode/secrets/unsloth-api-key"
 if [ "$PURGE" -eq 1 ]; then
-  for f in "$OC_CFG" "$OC_SECRET"; do
+  for f in "$OC_CFG" "$OC_SECRET" "$OC_SECRET_LEGACY"; do
     if [ -f "$f" ]; then
       rm -f "$f"
       REMOVED+=("purge: $f")
@@ -161,7 +163,7 @@ if [ "$PURGE" -eq 1 ]; then
   done
 else
   KEPT+=("opencode provider config $OC_CFG")
-  KEPT+=("unsloth secret $OC_SECRET")
+  KEPT+=("api key secret $OC_SECRET")
 fi
 
 # --------------------------------------------------------------------------- #

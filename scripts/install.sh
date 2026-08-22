@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# install.sh — idempotent installer for opencode-hermes-mcp (Unsloth defaults).
+# install.sh — idempotent, multi-provider installer for opencode-hermes-mcp.
+#
+# Providers: openai-compatible (custom OpenAI-compatible endpoint — Unsloth,
+# Ollama, vLLM, llama-server, ...), openai (official API), anthropic
+# (official API).
 #
 # Installs: OpenCode binary (PINNED), venv + mcp, OpenCode provider config +
 # secret, server credentials, launchers, systemd user service, Hermes config.
@@ -20,12 +24,12 @@ HOME_DIR="${OPENCODE_MCP_HOME:-$HOME}"
 SANDBOX=0
 [ "$HOME_DIR" != "$HOME" ] && SANDBOX=1
 
-# Unsloth defaults (defaults, not the only values — overridable via prompt/env).
-DEFAULT_BASE_URL="https://ai.helmwire.com/v1"
-DEFAULT_MODEL="unsloth/unsloth/Qwen3.8-27B-GGUF"
-PROVIDER_DISPLAY_NAME="Unsloth — ai.helmwire.com"
-CONTEXT_LIMIT=183040
-OUTPUT_LIMIT=65536
+# Neutral defaults (defaults, not the only values — overridable via prompt/env).
+DEFAULT_PROVIDER="openai-compatible"
+DEFAULT_BASE_URL="http://127.0.0.1:11434/v1"
+DEFAULT_LLM_SPEED="fast"
+DEFAULT_CONTEXT_LIMIT=128000
+DEFAULT_OUTPUT_LIMIT=32000
 
 PORT=4096
 ASSUME_YES=0
@@ -72,10 +76,22 @@ Options:
   --dry-run        print actions without executing
   -h, --help       this help
 
+Providers (menu in interactive mode, OPENCODE_PROVIDER with --yes):
+  openai-compatible  custom OpenAI-compatible endpoint (Unsloth, Ollama,
+                     vLLM, llama-server, ...) — default
+  openai             official OpenAI API
+  anthropic          official Anthropic API
+
 Env:
-  OPENCODE_LLM_BASE_URL   LLM base URL   (default $DEFAULT_BASE_URL)
-  UNSLOTH_API_KEY         Unsloth API key
-  OPENCODE_LLM_MODEL      model id       (default $DEFAULT_MODEL)
+  OPENCODE_PROVIDER       provider id (default $DEFAULT_PROVIDER)
+  OPENCODE_LLM_BASE_URL   LLM base URL (openai-compatible only,
+                          default $DEFAULT_BASE_URL)
+  OPENCODE_API_KEY        LLM API key (UNSLOTH_API_KEY accepted as a
+                          deprecated fallback)
+  OPENCODE_LLM_MODEL      model id (required)
+  OPENCODE_LLM_SPEED      slow (local LLM) | fast (default $DEFAULT_LLM_SPEED)
+  OPENCODE_CONTEXT_LIMIT  model context limit (default $DEFAULT_CONTEXT_LIMIT)
+  OPENCODE_OUTPUT_LIMIT   model output limit (default $DEFAULT_OUTPUT_LIMIT)
   OPENCODE_MCP_HOME       redirect all targets to a tmpdir (testing)
 USAGE
 }
@@ -101,31 +117,141 @@ log "repo: $REPO"
 [ "$DRY_RUN" -eq 1 ] && warn "dry-run mode: no changes will be made"
 
 # --------------------------------------------------------------------------- #
-# 1. LLM prompts (base URL / API key / model)
+# 1. LLM prompts (provider / base URL / API key / model / speed / limits)
 # --------------------------------------------------------------------------- #
-if [ "$ASSUME_YES" -eq 1 ]; then
-  BASE_URL="${OPENCODE_LLM_BASE_URL:-$DEFAULT_BASE_URL}"
-  API_KEY="${UNSLOTH_API_KEY:-}"
-  MODEL="${OPENCODE_LLM_MODEL:-$DEFAULT_MODEL}"
-  [ -n "$API_KEY" ] || die "--yes: no API key — set UNSLOTH_API_KEY (or drop --yes to be prompted)"
-else
-  printf 'LLM base URL [%s]: ' "${OPENCODE_LLM_BASE_URL:-$DEFAULT_BASE_URL}"
-  read -r ans || ans=""
-  BASE_URL="${ans:-${OPENCODE_LLM_BASE_URL:-$DEFAULT_BASE_URL}}"
-  if [ -n "${UNSLOTH_API_KEY:-}" ]; then
-    printf 'Unsloth API key [env UNSLOTH_API_KEY set — Enter to use it]: '
+valid_provider() {
+  case "$1" in
+    openai-compatible|openai|anthropic) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# API key: OPENCODE_API_KEY, with UNSLOTH_API_KEY as a deprecated fallback.
+resolve_api_key() {
+  local ans=""
+  if [ "$ASSUME_YES" -eq 0 ]; then
+    if [ -n "${OPENCODE_API_KEY:-}" ]; then
+      printf 'API key [env OPENCODE_API_KEY set — Enter to use it]: '
+    elif [ -n "${UNSLOTH_API_KEY:-}" ]; then
+      printf 'API key [env UNSLOTH_API_KEY set (deprecated) — Enter to use it]: '
+    else
+      printf 'API key: '
+    fi
+    read -r -s ans || ans=""
+    printf '\n'
+    API_KEY="${ans:-${OPENCODE_API_KEY:-}}"
   else
-    printf 'Unsloth API key: '
+    API_KEY="${OPENCODE_API_KEY:-}"
   fi
-  read -r -s ans || ans=""
-  printf '\n'
-  API_KEY="${ans:-${UNSLOTH_API_KEY:-}}"
-  [ -n "$API_KEY" ] || die "API key required (prompt or UNSLOTH_API_KEY)"
-  printf 'Model [%s]: ' "${OPENCODE_LLM_MODEL:-$DEFAULT_MODEL}"
+  if [ -z "$API_KEY" ] && [ -n "${UNSLOTH_API_KEY:-}" ]; then
+    warn "UNSLOTH_API_KEY is deprecated — using it as OPENCODE_API_KEY (please migrate)"
+    API_KEY="$UNSLOTH_API_KEY"
+  fi
+  if [ -z "$API_KEY" ]; then
+    if [ "$ASSUME_YES" -eq 1 ]; then
+      die "--yes: no API key — set OPENCODE_API_KEY (or drop --yes to be prompted)"
+    fi
+    die "API key required (prompt or OPENCODE_API_KEY)"
+  fi
+}
+
+if [ "$ASSUME_YES" -eq 1 ]; then
+  PROVIDER="${OPENCODE_PROVIDER:-$DEFAULT_PROVIDER}"
+  valid_provider "$PROVIDER" \
+    || die "--yes: unknown OPENCODE_PROVIDER '$PROVIDER' (expected openai-compatible, openai, or anthropic)"
+  case "$PROVIDER" in
+    openai-compatible) BASE_URL="${OPENCODE_LLM_BASE_URL:-$DEFAULT_BASE_URL}" ;;
+    *) BASE_URL="" ;;
+  esac
+  MODEL="${OPENCODE_LLM_MODEL:-}"
+  [ -n "$MODEL" ] || die "--yes: no model — set OPENCODE_LLM_MODEL (or drop --yes to be prompted)"
+  resolve_api_key
+  case "${OPENCODE_LLM_SPEED:-$DEFAULT_LLM_SPEED}" in
+    slow|fast) LLM_SPEED="${OPENCODE_LLM_SPEED:-$DEFAULT_LLM_SPEED}" ;;
+    *) die "--yes: invalid OPENCODE_LLM_SPEED '${OPENCODE_LLM_SPEED}' (expected slow or fast)" ;;
+  esac
+  CONTEXT_LIMIT="${OPENCODE_CONTEXT_LIMIT:-$DEFAULT_CONTEXT_LIMIT}"
+  OUTPUT_LIMIT="${OPENCODE_OUTPUT_LIMIT:-$DEFAULT_OUTPUT_LIMIT}"
+  case "$CONTEXT_LIMIT" in ''|*[!0-9]*) die "--yes: OPENCODE_CONTEXT_LIMIT must be a number (got: $CONTEXT_LIMIT)" ;; esac
+  case "$OUTPUT_LIMIT" in ''|*[!0-9]*) die "--yes: OPENCODE_OUTPUT_LIMIT must be a number (got: $OUTPUT_LIMIT)" ;; esac
+else
+  case "${OPENCODE_PROVIDER:-}" in
+    '') DEFAULT_CHOICE=1 ;;
+    openai-compatible) DEFAULT_CHOICE=1 ;;
+    openai) DEFAULT_CHOICE=2 ;;
+    anthropic) DEFAULT_CHOICE=3 ;;
+    *) warn "unknown OPENCODE_PROVIDER '${OPENCODE_PROVIDER}' — ignoring (expected openai-compatible, openai, or anthropic)"
+       DEFAULT_CHOICE=1 ;;
+  esac
+  cat <<'MENU'
+Choose an LLM provider:
+  1) openai-compatible  custom OpenAI-compatible endpoint (Unsloth, Ollama, vLLM, llama-server, ...)
+  2) openai             official OpenAI API
+  3) anthropic          official Anthropic API
+MENU
+  printf 'Provider [%s]: ' "$DEFAULT_CHOICE"
   read -r ans || ans=""
-  MODEL="${ans:-${OPENCODE_LLM_MODEL:-$DEFAULT_MODEL}}"
+  case "${ans:-$DEFAULT_CHOICE}" in
+    1|openai-compatible) PROVIDER="openai-compatible" ;;
+    2|openai) PROVIDER="openai" ;;
+    3|anthropic) PROVIDER="anthropic" ;;
+    *) die "unknown provider '${ans:-?}' (expected 1/2/3 or openai-compatible/openai/anthropic)" ;;
+  esac
+  if [ "$PROVIDER" = "openai-compatible" ]; then
+    printf 'LLM base URL [%s]: ' "${OPENCODE_LLM_BASE_URL:-$DEFAULT_BASE_URL}"
+    read -r ans || ans=""
+    BASE_URL="${ans:-${OPENCODE_LLM_BASE_URL:-$DEFAULT_BASE_URL}}"
+  else
+    BASE_URL=""
+  fi
+  resolve_api_key
+  if [ -n "${OPENCODE_LLM_MODEL:-}" ]; then
+    printf 'Model id [env OPENCODE_LLM_MODEL=%s — Enter to use it]: ' "$OPENCODE_LLM_MODEL"
+  else
+    printf 'Model id (required, e.g. qwen3.8-27b or gpt-4o): '
+  fi
+  read -r ans || ans=""
+  MODEL="${ans:-${OPENCODE_LLM_MODEL:-}}"
+  [ -n "$MODEL" ] || die "model id required (prompt or OPENCODE_LLM_MODEL)"
+  printf 'LLM speed — slow (local LLM) or fast (cloud API)? [fast]: '
+  read -r ans || ans=""
+  case "${ans:-fast}" in
+    slow|local) LLM_SPEED="slow" ;;
+    fast|cloud) LLM_SPEED="fast" ;;
+    *) die "unknown LLM speed '${ans:-?}' (expected slow or fast)" ;;
+  esac
+  printf 'Context limit [%s]: ' "${OPENCODE_CONTEXT_LIMIT:-$DEFAULT_CONTEXT_LIMIT}"
+  read -r ans || ans=""
+  CONTEXT_LIMIT="${ans:-${OPENCODE_CONTEXT_LIMIT:-$DEFAULT_CONTEXT_LIMIT}}"
+  case "$CONTEXT_LIMIT" in ''|*[!0-9]*) die "context limit must be a number (got: $CONTEXT_LIMIT)" ;; esac
+  printf 'Output limit [%s]: ' "${OPENCODE_OUTPUT_LIMIT:-$DEFAULT_OUTPUT_LIMIT}"
+  read -r ans || ans=""
+  OUTPUT_LIMIT="${ans:-${OPENCODE_OUTPUT_LIMIT:-$DEFAULT_OUTPUT_LIMIT}}"
+  case "$OUTPUT_LIMIT" in ''|*[!0-9]*) die "output limit must be a number (got: $OUTPUT_LIMIT)" ;; esac
 fi
-log "LLM: base_url=$BASE_URL model=$MODEL"
+
+# Provider metadata: opencode.json provider id, npm package, display name.
+case "$PROVIDER" in
+  openai-compatible)
+    PROVIDER_ID="openai-compatible"
+    NPM_PACKAGE="@ai-sdk/openai-compatible"
+    PROVIDER_NAME="OpenAI-compatible — $BASE_URL"
+    NEEDS_BASE_URL=1
+    ;;
+  openai)
+    PROVIDER_ID="openai"
+    NPM_PACKAGE="@ai-sdk/openai"
+    PROVIDER_NAME="OpenAI"
+    NEEDS_BASE_URL=0
+    ;;
+  anthropic)
+    PROVIDER_ID="anthropic"
+    NPM_PACKAGE="@ai-sdk/anthropic"
+    PROVIDER_NAME="Anthropic"
+    NEEDS_BASE_URL=0
+    ;;
+esac
+log "LLM: provider=$PROVIDER model=$MODEL speed=$LLM_SPEED${BASE_URL:+ base_url=$BASE_URL}"
 
 # --------------------------------------------------------------------------- #
 # 2. OpenCode binary (PINNED to $OPENCODE_VERSION)
@@ -179,30 +305,45 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-# 4. OpenCode provider config + Unsloth secret
+# 4. OpenCode provider config + API key secret
 # --------------------------------------------------------------------------- #
 OC_CFG="$HOME_DIR/.config/opencode/opencode.json"
-OC_SECRET="$HOME_DIR/.config/opencode/secrets/unsloth-api-key"
+OC_SECRET="$HOME_DIR/.config/opencode/secrets/api-key"
 if [ -f "$OC_CFG" ] && [ -f "$OC_SECRET" ] && [ "$FORCE_CONFIG" -eq 0 ]; then
   log "opencode config: $OC_CFG + secret already present — skipping (use --force-config to overwrite)"
   SKIPPED+=("opencode config + secret (already present)")
 else
-  MODEL_KEY="${MODEL#*/}"
-  log "opencode config: writing $OC_CFG (provider unsloth, model $MODEL)"
-  write_file "$OC_CFG" <<EOF
+  # Model reference: "<provider>/<model id>". A model id may itself contain
+  # slashes (e.g. Ollama names); a value already prefixed with the provider
+  # id is used as-is.
+  case "$MODEL" in
+    "$PROVIDER_ID"/*) MODEL_REF="$MODEL"; MODEL_KEY="${MODEL#"$PROVIDER_ID/"}" ;;
+    *) MODEL_REF="$PROVIDER_ID/$MODEL"; MODEL_KEY="$MODEL" ;;
+  esac
+  # Provider options: baseURL (openai-compatible only) + apiKey (secret file)
+  # + long-timeout options for slow (local) LLMs.
+  OPTIONS_BLOCK='        "apiKey": "{file:secrets/api-key}"'
+  if [ "$NEEDS_BASE_URL" -eq 1 ]; then
+    OPTIONS_BLOCK="        \"baseURL\": \"$BASE_URL\",
+$OPTIONS_BLOCK"
+  fi
+  if [ "$LLM_SPEED" = "slow" ]; then
+    OPTIONS_BLOCK="$OPTIONS_BLOCK,
+        \"timeout\": false,
+        \"headerTimeout\": false,
+        \"chunkTimeout\": 120000"
+  fi
+  log "opencode config: writing $OC_CFG (provider $PROVIDER_ID, model $MODEL_REF, speed $LLM_SPEED)"
+  OC_CONFIG=$(cat <<EOF
 {
   "\$schema": "https://opencode.ai/config.json",
-  "model": "$MODEL",
+  "model": "$MODEL_REF",
   "provider": {
-    "unsloth": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "$PROVIDER_DISPLAY_NAME",
+    "$PROVIDER_ID": {
+      "npm": "$NPM_PACKAGE",
+      "name": "$PROVIDER_NAME",
       "options": {
-        "baseURL": "$BASE_URL",
-        "apiKey": "{file:secrets/unsloth-api-key}",
-        "timeout": false,
-        "headerTimeout": false,
-        "chunkTimeout": 120000
+$OPTIONS_BLOCK
       },
       "models": {
         "$MODEL_KEY": {
@@ -224,9 +365,12 @@ else
   }
 }
 EOF
+)
+  [ "$DRY_RUN" -eq 1 ] && printf '%s\n' "$OC_CONFIG"
+  printf '%s\n' "$OC_CONFIG" | write_file "$OC_CFG"
   printf '%s\n' "$API_KEY" | write_file "$OC_SECRET"
   [ "$DRY_RUN" -eq 0 ] && chmod 600 "$OC_SECRET"
-  INSTALLED+=("opencode config + secret (unsloth provider)")
+  INSTALLED+=("opencode config + secret ($PROVIDER_ID provider)")
 fi
 
 # --------------------------------------------------------------------------- #

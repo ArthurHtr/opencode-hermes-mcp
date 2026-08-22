@@ -21,8 +21,8 @@ Hermes (LLM)  --MCP stdio-->  server.py (FastMCP, 6 tools)  --HTTP + SSE-->  Ope
   same OpenCode turn (the prompt is never resubmitted).
 - **Layer 3 — OpenCode server**: a permanent `opencode serve` process
   (systemd user service `opencode-server`, loopback :4096, HTTP basic auth).
-  Its LLM is the Unsloth endpoint (OpenAI-compatible), configured in
-  `~/.config/opencode/opencode.json`.
+  Its LLM is any supported provider (OpenAI-compatible endpoint, OpenAI, or
+  Anthropic), configured in `~/.config/opencode/opencode.json`.
 
 Tools exposed to Hermes: `opencode_run`, `opencode_answer`,
 `opencode_permission`, `opencode_abort`, `opencode_inspect` (diagnostic
@@ -43,15 +43,62 @@ scripts/install.sh
 ```
 
 `install.sh` is idempotent — re-running it skips what is already in place.
-It installs the pinned OpenCode binary, the venv (`mcp==1.12.4`), the
-Unsloth provider config + secret, the server credentials, the two launchers,
-the systemd user service, and patches `~/.hermes/config.yaml` (backup kept as
+It installs the pinned OpenCode binary, the venv (`mcp==1.12.4`), the LLM
+provider config + secret, the server credentials, the two launchers, the
+systemd user service, and patches `~/.hermes/config.yaml` (backup kept as
 `.bak`). It finishes with a health check + `smoke_client.py` (must print
 `tool surface OK`).
 
-Flags: `--yes` (non-interactive, uses env `OPENCODE_LLM_BASE_URL` /
-`UNSLOTH_API_KEY` / `OPENCODE_LLM_MODEL`), `--port N` (default 4096),
-`--skip-binary`, `--force-config`, `--dry-run`.
+### LLM providers
+
+The installer is provider-agnostic. Three providers are supported:
+
+| Provider | Use | npm package |
+| --- | --- | --- |
+| `openai-compatible` | any OpenAI-compatible endpoint (Unsloth, Ollama, vLLM, llama-server, ...) — default | `@ai-sdk/openai-compatible` |
+| `openai` | official OpenAI API | `@ai-sdk/openai` |
+| `anthropic` | official Anthropic API | `@ai-sdk/anthropic` |
+
+Interactive: pick the provider from the menu, then answer the prompts —
+base URL + API key + model for `openai-compatible`, API key + model for
+`openai` / `anthropic` — then the LLM speed (`slow` for a local LLM, which
+adds `timeout:false` / `headerTimeout:false` / `chunkTimeout:120000` to the
+provider options; `fast` is the default) and the model limits (context /
+output, defaults 128000 / 32000).
+
+Non-interactive (`--yes`), everything comes from env. Local
+OpenAI-compatible endpoint (Ollama / vLLM / Unsloth / ...):
+
+```sh
+OPENCODE_PROVIDER=openai-compatible \
+OPENCODE_LLM_BASE_URL=http://127.0.0.1:11434/v1 \
+OPENCODE_API_KEY=... \
+OPENCODE_LLM_MODEL=qwen3.8-27b \
+OPENCODE_LLM_SPEED=slow \
+scripts/install.sh --yes
+```
+
+OpenAI (cloud):
+
+```sh
+OPENCODE_PROVIDER=openai OPENCODE_API_KEY=sk-... OPENCODE_LLM_MODEL=gpt-4o \
+scripts/install.sh --yes
+```
+
+Anthropic (cloud):
+
+```sh
+OPENCODE_PROVIDER=anthropic OPENCODE_API_KEY=sk-ant-... \
+OPENCODE_LLM_MODEL=claude-sonnet-4-5 scripts/install.sh --yes
+```
+
+Flags: `--yes` (non-interactive, uses env `OPENCODE_PROVIDER` /
+`OPENCODE_LLM_BASE_URL` / `OPENCODE_API_KEY` / `OPENCODE_LLM_MODEL` /
+`OPENCODE_LLM_SPEED` / `OPENCODE_CONTEXT_LIMIT` / `OPENCODE_OUTPUT_LIMIT`),
+`--port N` (default 4096), `--skip-binary`, `--force-config`, `--dry-run`.
+
+`UNSLOTH_API_KEY` is still accepted as a deprecated fallback for
+`OPENCODE_API_KEY` (existing scripts keep working).
 
 **A new Hermes session is required** after installation to load the MCP
 server.
@@ -77,12 +124,12 @@ Hermes delegates work through the MCP tools — no manual CLI needed:
 scripts/upgrade.sh            # controller only: git pull + venv deps + restart + smoke
 scripts/upgrade.sh --binary   # upgrade the OpenCode BINARY (latest) — see warning below
 scripts/uninstall.sh          # service, launchers, venv, hermes entry, credentials
-scripts/uninstall.sh --purge  # + OpenCode provider config + Unsloth secret
+scripts/uninstall.sh --purge  # + OpenCode provider config + API key secret
 scripts/uninstall.sh --purge-binary  # + the OpenCode binary
 ```
 
 `uninstall.sh` never touches the git clone, the OpenCode provider config, the
-Unsloth secret, or the binary (unless the purge flags say so).
+API key secret, or the binary (unless the purge flags say so).
 
 ## Version pin: OpenCode 1.18.18
 
