@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 *.bak
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.sandbox/
