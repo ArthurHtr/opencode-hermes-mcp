@@ -1,93 +1,125 @@
 # opencode-hermes-mcp
 
-Deterministic MCP controller between Hermes (supervisor) and the OpenCode server. Pins OpenCode 1.18.18. Unsloth-specific.
+Deterministic MCP controller between **Hermes** (supervisor LLM) and the
+permanent **OpenCode** server. The controller is a state machine — no LLM —
+that blocks on OpenCode turns and surfaces questions/permissions to Hermes so
+the supervisor LLM can decide and resume the *same* turn.
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin http://192.168.1.63/utility/opencode-hermes-mcp.git
-git branch -M main
-git push -uf origin main
+Hermes (LLM)  --MCP stdio-->  server.py (FastMCP, 6 tools)  --HTTP + SSE-->  OpenCode server :4096
 ```
 
-## Integrate with your tools
+- **Layer 1 — Hermes**: the supervisor LLM. It delegates a coding task with
+  `opencode_run` and decides when the controller reports
+  `needs_agent_input` (question / permission).
+- **Layer 2 — this controller** (`server.py` + `controller.py` + `client.py`
+  + `models.py`): a NO-LLM process spawned by Hermes over MCP stdio. It
+  submits the task, watches SSE + REST, blocks until the turn completes /
+  errors / needs input, and posts the supervisor's decisions back into the
+  same OpenCode turn (the prompt is never resubmitted).
+- **Layer 3 — OpenCode server**: a permanent `opencode serve` process
+  (systemd user service `opencode-server`, loopback :4096, HTTP basic auth).
+  Its LLM is the Unsloth endpoint (OpenAI-compatible), configured in
+  `~/.config/opencode/opencode.json`.
 
-- [ ] [Set up project integrations](http://192.168.1.63/utility/opencode-hermes-mcp/-/settings/integrations)
+Tools exposed to Hermes: `opencode_run`, `opencode_answer`,
+`opencode_permission`, `opencode_abort`, `opencode_inspect` (diagnostic
+only), `opencode_sessions`.
 
-## Collaborate with your team
+## Prerequisites
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+- Hermes installed (`~/.hermes/config.yaml` present)
+- `python3` >= 3.11 (with PyYAML for the Hermes config patch)
+- Network access (OpenCode binary install, `mcp` package, LLM endpoint)
+- `systemd` user sessions (for the `opencode-server` service)
 
-## Test and Deploy
+## Installation (2 commands)
 
-Use the built-in continuous integration in GitLab.
+```sh
+git clone <repo-url> opencode-hermes-mcp && cd opencode-hermes-mcp
+scripts/install.sh
+```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+`install.sh` is idempotent — re-running it skips what is already in place.
+It installs the pinned OpenCode binary, the venv (`mcp==1.12.4`), the
+Unsloth provider config + secret, the server credentials, the two launchers,
+the systemd user service, and patches `~/.hermes/config.yaml` (backup kept as
+`.bak`). It finishes with a health check + `smoke_client.py` (must print
+`tool surface OK`).
 
-***
+Flags: `--yes` (non-interactive, uses env `OPENCODE_LLM_BASE_URL` /
+`UNSLOTH_API_KEY` / `OPENCODE_LLM_MODEL`), `--port N` (default 4096),
+`--skip-binary`, `--force-config`, `--dry-run`.
 
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+**A new Hermes session is required** after installation to load the MCP
+server.
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Hermes delegates work through the MCP tools — no manual CLI needed:
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+- `opencode_run(directory, task, agent)` — submit a task; blocks until the
+  turn completes, errors, or needs input. `agent` is required for a new
+  session (a primary agent of the project, e.g. `build`, `plan`, or a
+  project-specific agent).
+- When a tool returns `state=needs_agent_input`, Hermes decides:
+  `opencode_answer` (pick exact option labels) or `opencode_permission`
+  (`once` / `always` / `reject`) — both resume the same turn.
+- `opencode_abort` stops a stuck run; `opencode_sessions` lists sessions for
+  a directory; `opencode_inspect` is for exceptional diagnostics only (never
+  poll a running task).
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## Upgrade / uninstall
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```sh
+scripts/upgrade.sh            # controller only: git pull + venv deps + restart + smoke
+scripts/upgrade.sh --binary   # upgrade the OpenCode BINARY (latest) — see warning below
+scripts/uninstall.sh          # service, launchers, venv, hermes entry, credentials
+scripts/uninstall.sh --purge  # + OpenCode provider config + Unsloth secret
+scripts/uninstall.sh --purge-binary  # + the OpenCode binary
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+`uninstall.sh` never touches the git clone, the OpenCode provider config, the
+Unsloth secret, or the binary (unless the purge flags say so).
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Version pin: OpenCode 1.18.18
 
-## License
-For open source projects, say how it is licensed.
+The controller is **validated against OpenCode `1.18.18` only** (its endpoint
+contract was verified against that binary's live `/doc`, not the web docs).
+`install.sh` pins the binary to `1.18.18`; `upgrade.sh` never upgrades the
+binary by default.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+If you upgrade the binary (`scripts/upgrade.sh --binary [VERSION]`), the
+script warns you and you MUST re-validate the controller before trusting it:
+
+```sh
+.venv/bin/python tests/run_tests.py
+```
+
+(all checks must pass; the suite drives the controller over MCP stdio against
+the live server). If it fails, pin back: `scripts/upgrade.sh --binary 1.18.18`.
+
+## Timeouts
+
+Three independent timeouts bound the pipeline: the **controller** run timeout
+(`DEFAULT_RUN_TIMEOUT` = 3600 s — a single `opencode_run`/`opencode_answer`/
+`opencode_permission` call gives up after an hour), the **MCP** server
+timeout in `~/.hermes/config.yaml` (`mcp_servers.opencode.timeout` = 14400 s,
+`connect_timeout` = 30 s), and the **Hermes tools** timeouts
+(`timeouts.tools.sequential_call` / `concurrent_batch` = 14400 s) — the outer
+two are set 4x above the controller's so a long-but-healthy turn is never
+killed by the supervisor layer.
+
+## Files
+
+| File | Role |
+| --- | --- |
+| `server.py` | FastMCP stdio server (the 6 tools) |
+| `controller.py` | state machine: submit / wait / resume / classify |
+| `client.py` | HTTP + SSE client for the OpenCode server |
+| `models.py` | dataclasses for turns / interactions |
+| `smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
+| `tests/run_tests.py` | full integration suite (live LLM turns) |
+| `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle |
