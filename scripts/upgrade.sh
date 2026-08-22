@@ -91,7 +91,7 @@ run_smoke() {
   [ -x "$VENV_PY" ] || die "venv missing: $VENV_PY (run scripts/install.sh first)"
   log "smoke: running smoke_client.py"
   local smoke_out
-  if ! smoke_out="$("$VENV_PY" "$REPO/smoke_client.py" 2>&1)"; then
+  if ! smoke_out="$("$VENV_PY" -m opencode_hermes_mcp.smoke_client 2>&1)"; then
     printf '%s\n' "$smoke_out"
     die "smoke test failed (non-zero exit)"
   fi

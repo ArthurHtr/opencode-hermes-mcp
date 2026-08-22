@@ -1,5 +1,9 @@
 # opencode-hermes-mcp
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](#prerequisites)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.18.18%20(pinned)-brightgreen.svg)](#version-pin-opencode-11818)
+
 Deterministic MCP controller between **Hermes** (supervisor LLM) and the
 permanent **OpenCode** server. The controller is a state machine — no LLM —
 that blocks on OpenCode turns and surfaces questions/permissions to Hermes so
@@ -8,17 +12,17 @@ the supervisor LLM can decide and resume the *same* turn.
 ## Architecture
 
 ```
-Hermes (LLM)  --MCP stdio-->  server.py (FastMCP, 6 tools)  --HTTP + SSE-->  OpenCode server :4096
+Hermes (LLM)  --MCP stdio-->  opencode_hermes_mcp.server (FastMCP, 6 tools)  --HTTP + SSE-->  OpenCode server :4096
 ```
 
 - **Layer 1 — Hermes**: the supervisor LLM. It delegates a coding task with
   `opencode_run` and decides when the controller reports
   `needs_agent_input` (question / permission).
-- **Layer 2 — this controller** (`server.py` + `controller.py` + `client.py`
-  + `models.py`): a NO-LLM process spawned by Hermes over MCP stdio. It
-  submits the task, watches SSE + REST, blocks until the turn completes /
-  errors / needs input, and posts the supervisor's decisions back into the
-  same OpenCode turn (the prompt is never resubmitted).
+- **Layer 2 — this controller** (`opencode_hermes_mcp/`: `server.py` +
+  `controller.py` + `client.py` + `models.py`): a NO-LLM process spawned by
+  Hermes over MCP stdio. It submits the task, watches SSE + REST, blocks until
+  the turn completes / errors / needs input, and posts the supervisor's
+  decisions back into the same OpenCode turn (the prompt is never resubmitted).
 - **Layer 3 — OpenCode server**: a permanent `opencode serve` process
   (systemd user service `opencode-server`, loopback :4096, HTTP basic auth).
   Its LLM is any supported provider (OpenAI-compatible endpoint, OpenAI, or
@@ -43,10 +47,11 @@ scripts/install.sh
 ```
 
 `install.sh` is idempotent — re-running it skips what is already in place.
-It installs the pinned OpenCode binary, the venv (`mcp==1.12.4`), the LLM
-provider config + secret, the server credentials, the two launchers, the
-systemd user service, and patches `~/.hermes/config.yaml` (backup kept as
-`.bak`). It finishes with a health check + `smoke_client.py` (must print
+It installs the pinned OpenCode binary, the venv (the `opencode_hermes_mcp`
+package with `mcp==1.12.4` pinned), the LLM provider config + secret, the
+server credentials, the two launchers, the systemd user service, and patches
+`~/.hermes/config.yaml` (backup kept as `.bak`). It finishes with a health
+check + `python -m opencode_hermes_mcp.smoke_client` (must print
 `tool surface OK`).
 
 ### LLM providers
@@ -118,6 +123,28 @@ Hermes delegates work through the MCP tools — no manual CLI needed:
   a directory; `opencode_inspect` is for exceptional diagnostics only (never
   poll a running task).
 
+The Hermes-side wiring (written by `scripts/install.sh` into
+`~/.hermes/config.yaml`):
+
+```yaml
+mcp_servers:
+  opencode:
+    command: ~/.local/bin/opencode-mcp-launch.sh
+    enabled: true
+    timeout: 14400
+    connect_timeout: 30
+    supports_parallel_tool_calls: false
+timeouts:
+  tools:
+    sequential_call: 14400
+    concurrent_batch: 14400
+```
+
+The launcher reads the OpenCode server credentials from
+`~/.config/hermes/opencode-server.json` and execs
+`python -m opencode_hermes_mcp.server` in the repo venv — `config.yaml` stays
+secret-free.
+
 ## Upgrade / uninstall
 
 ```sh
@@ -159,14 +186,23 @@ timeout in `~/.hermes/config.yaml` (`mcp_servers.opencode.timeout` = 14400 s,
 two are set 4x above the controller's so a long-but-healthy turn is never
 killed by the supervisor layer.
 
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup, how to run the
+smoke test and the integration suite, and the contribution conventions.
+
 ## Files
 
 | File | Role |
 | --- | --- |
-| `server.py` | FastMCP stdio server (the 6 tools) |
-| `controller.py` | state machine: submit / wait / resume / classify |
-| `client.py` | HTTP + SSE client for the OpenCode server |
-| `models.py` | dataclasses for turns / interactions |
-| `smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
+| `opencode_hermes_mcp/server.py` | FastMCP stdio server (the 6 tools) |
+| `opencode_hermes_mcp/controller.py` | state machine: submit / wait / resume / classify |
+| `opencode_hermes_mcp/client.py` | HTTP + SSE client for the OpenCode server |
+| `opencode_hermes_mcp/models.py` | data helpers for turns / interactions |
+| `opencode_hermes_mcp/smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
 | `tests/run_tests.py` | full integration suite (live LLM turns) |
 | `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle |
+
+## License
+
+[MIT](LICENSE) — Copyright (c) 2026 Arthur Hottier.

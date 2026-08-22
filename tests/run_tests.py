@@ -28,7 +28,7 @@ from mcp.client.stdio import stdio_client  # noqa: E402
 
 REPO = os.environ.get("OPENCODE_MCP_TEST_DIR", "/tmp/oc-mcp-test/gitrepo")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONTROLLER = os.path.join(ROOT, "server.py")
+CONTROLLER_MODULE = "opencode_hermes_mcp.server"
 VENV_PY = os.path.join(ROOT, ".venv", "bin", "python")
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -98,7 +98,7 @@ async def spawn_controller(pid_file: str | None = None) -> ControllerHandle:
     stderr_path = "/tmp/oc-mcp-test/ctrl_stderr.log"
     os.makedirs(os.path.dirname(stderr_path), exist_ok=True)
     stderr_log = open(stderr_path, "ab")
-    params = StdioServerParameters(command=VENV_PY, args=[CONTROLLER], env=env)
+    params = StdioServerParameters(command=VENV_PY, args=["-m", CONTROLLER_MODULE], env=env)
     cm = stdio_client(params, errlog=stderr_log)
     read, write = await cm.__aenter__()
     try:
@@ -132,7 +132,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 async def find_busy_session(directory: str) -> str | None:
-    from client import OpenCode
+    from opencode_hermes_mcp.client import OpenCode
 
     oc = OpenCode()
     try:
@@ -162,7 +162,7 @@ async def newest_session(directory: str, since_ms: float) -> str | None:
     (which returns {} while another controller process holds the SSE stream —
     a 1.18.18 quirk; see references/mcp-controller.md).
     """
-    from client import OpenCode
+    from opencode_hermes_mcp.client import OpenCode
 
     oc = OpenCode()
     try:
@@ -309,9 +309,11 @@ async def test_question_flow():
                 "avec le contenu minimal correct et termine."
             ),
         }, timeout_s=600)
-        check("question: run returned needs_agent_input(kind=question)",
-              data.get("state") == "needs_agent_input" and data.get("kind") == "question",
-              f"state={data.get('state')} kind={data.get('kind')} err={str(data.get('error'))[:150]}")
+        check(
+            "question: run returned needs_agent_input(kind=question)",
+            data.get("state") == "needs_agent_input" and data.get("kind") == "question",
+            f"state={data.get('state')} kind={data.get('kind')} err={str(data.get('error'))[:150]}",
+        )
         if data.get("state") != "needs_agent_input":
             return
         sid = data["session_id"]
@@ -349,9 +351,15 @@ async def test_question_flow():
                     break
             else:
                 break
-        check("question: answer resumed same session to completed",
-              data2.get("state") == "completed" and data2.get("session_id") == sid,
-              f"state={data2.get('state')} sid={data2.get('session_id')} err={str(data2.get('error'))[:150]}")
+        detail = (
+            f"state={data2.get('state')} sid={data2.get('session_id')} "
+            f"err={str(data2.get('error'))[:150]}"
+        )
+        check(
+            "question: answer resumed same session to completed",
+            data2.get("state") == "completed" and data2.get("session_id") == sid,
+            detail,
+        )
         expected = os.path.join(REPO, answer)
         check("question: file with chosen name exists", os.path.exists(expected),
               f"expected {expected}")
@@ -450,9 +458,11 @@ async def test_permission_flow():
                 "attends la décision. Termine par une confirmation."
             ),
         }, timeout_s=600)
-        check("permission: run returned needs_agent_input(kind=permission)",
-              data.get("state") == "needs_agent_input" and data.get("kind") == "permission",
-              f"state={data.get('state')} kind={data.get('kind')} err={str(data.get('error'))[:150]}")
+        check(
+            "permission: run returned needs_agent_input(kind=permission)",
+            data.get("state") == "needs_agent_input" and data.get("kind") == "permission",
+            f"state={data.get('state')} kind={data.get('kind')} err={str(data.get('error'))[:150]}",
+        )
         if data.get("state") != "needs_agent_input":
             return
         sid = data["session_id"]
@@ -724,7 +734,7 @@ async def test_agent_used_verification():
         # Close the controller before the standalone fetch so it is not left
         # holding a stream (and so the turn's durable state is cleared).
         await session.close()
-    from client import OpenCode
+    from opencode_hermes_mcp.client import OpenCode
 
     # Fetch the turn's messages with a standalone (authenticated) client and
     # verify the assistant message was produced by the requested agent. A
@@ -743,7 +753,11 @@ async def test_agent_used_verification():
         print(f"DBG agent-verify: n_messages={len(messages)}", flush=True)
         for m in messages:
             info = m.get("info") or {}
-            print(f"DBG   role={info.get('role')} agent={info.get('agent')!r} finish={info.get('finish')}", flush=True)
+            print(
+                f"DBG   role={info.get('role')} agent={info.get('agent')!r} "
+                f"finish={info.get('finish')}",
+                flush=True,
+            )
     agents_used = set()
     for m in messages:
         info = m.get("info") or {}
@@ -758,8 +772,8 @@ async def test_server_down():
     unreachable — tested against a dead port."""
     import httpx
 
-    from client import OpenCode
-    from controller import Controller
+    from opencode_hermes_mcp.client import OpenCode
+    from opencode_hermes_mcp.controller import Controller
 
     oc = OpenCode()
     oc._client = httpx.AsyncClient(
@@ -781,7 +795,7 @@ async def test_output_limit_classification():
     """Pure-function test (no LLM, no controller, no server): the
     finish='length' classifier must return "error" only when the turn
     produced no deliverable (empty diff AND anecdotal text)."""
-    from controller import classify_length_finish
+    from opencode_hermes_mcp.controller import classify_length_finish
 
     empty_diff = {"files": 0, "additions": 0, "deletions": 0, "changed_files": []}
     nonempty_diff = {"files": 1, "additions": 3, "deletions": 1, "changed_files": ["a.py"]}
@@ -845,9 +859,11 @@ async def test_custom_agent_e2e():
                 }, timeout_s=600)
             else:
                 break
-        check("custom-agent: run completed",
-              data.get("state") == "completed",
-              f"state={data.get('state')} kind={data.get('kind')} err={str(data.get('error'))[:150]}")
+        check(
+            "custom-agent: run completed",
+            data.get("state") == "completed",
+            f"state={data.get('state')} kind={data.get('kind')} err={str(data.get('error'))[:150]}",
+        )
         if data.get("state") != "completed":
             return
         sid = data["session_id"]
@@ -864,7 +880,7 @@ async def test_custom_agent_e2e():
     if not sid:
         return
     await _kill_orphan_controllers()
-    from client import OpenCode
+    from opencode_hermes_mcp.client import OpenCode
     oc = OpenCode()
     messages = []
     for _ in range(20):
@@ -908,11 +924,10 @@ async def _kill_orphan_controllers() -> None:
     breaks tests that fetch messages/status via their own client. The test
     process itself is run_tests.py, so this is safe.
     """
-    import re
     import subprocess
     try:
         # Match this repo's controller process (portable across machines).
-        pattern = re.escape(os.path.dirname(CONTROLLER)) + r"/server[.]py"
+        pattern = r"opencode_hermes_mcp[.]server"
         out = subprocess.run(
             ["pgrep", "-f", pattern],
             capture_output=True, text=True, timeout=10,
@@ -938,7 +953,7 @@ async def _startup_cleanup() -> None:
     — the suite would hang in an infinite 'working' loop. Clear them first.
     """
     await _kill_orphan_controllers()
-    from client import OpenCode
+    from opencode_hermes_mcp.client import OpenCode
 
     oc = OpenCode()
     try:

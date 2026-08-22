@@ -22,8 +22,8 @@ import os
 import time
 from typing import Any
 
-from client import OpenCode, OpenCodeError, event_stream
-from models import (
+from .client import OpenCode, OpenCodeError, event_stream
+from .models import (
     assistant_text,
     clear_turn_state,
     diff_summary,
@@ -437,7 +437,10 @@ class Controller:
         turn.setdefault("tree", {sid})
         save_turn_state(turn)
         sse_task = asyncio.create_task(self._subscribe(turn))
-        deadline = deadline_override if deadline_override is not None else time.monotonic() + timeout
+        if deadline_override is not None:
+            deadline = deadline_override
+        else:
+            deadline = time.monotonic() + timeout
         try:
             while True:
                 remaining = deadline - time.monotonic()
@@ -457,7 +460,8 @@ class Controller:
                 ev = self._poke(sid)
                 ev.clear()
                 try:
-                    await asyncio.wait_for(ev.wait(), timeout=min(RECONCILE_POKE_TIMEOUT, remaining))
+                    poke_timeout = min(RECONCILE_POKE_TIMEOUT, remaining)
+                    await asyncio.wait_for(ev.wait(), timeout=poke_timeout)
                 except asyncio.TimeoutError:
                     pass  # safety poke → reconcile anyway
                 # FAST-PATH abort: if we were asked to abort this session,
@@ -583,7 +587,7 @@ class Controller:
         if session_id:
             sid = session_id
             try:
-                sess_info = await self.oc.session(sid)
+                await self.oc.session(sid)
             except OpenCodeError as exc:
                 return {
                     "ok": False,
@@ -751,15 +755,19 @@ class Controller:
         if quest.get("sessionID") != session_id:
             return {
                 "ok": False,
-                "error": f"question {question_id} belongs to session {quest.get('sessionID')}, not {session_id}",
+                "error": (
+                    f"question {question_id} belongs to session "
+                    f"{quest.get('sessionID')}, not {session_id}"
+                ),
             }
         # 2) validate answers against the question's options
         ok, err = validate_question_answers(quest, answers)
         if not ok:
             return {"ok": False, "error": err, "session_id": session_id, "question_id": question_id}
         # 3) post the answer
+        normalized = [list(a) if isinstance(a, list) else [a] for a in answers]
         try:
-            await self.oc.reply_question(question_id, [list(a) if isinstance(a, list) else [a] for a in answers], directory)
+            await self.oc.reply_question(question_id, normalized, directory)
         except OpenCodeError as exc:
             return {
                 "ok": False,
@@ -781,7 +789,12 @@ class Controller:
     ) -> dict[str, Any]:
         ok, err = validate_permission_reply(reply)
         if not ok:
-            return {"ok": False, "error": err, "session_id": session_id, "permission_id": permission_id}
+            return {
+                "ok": False,
+                "error": err,
+                "session_id": session_id,
+                "permission_id": permission_id,
+            }
         # 1) validate the permission is still pending
         try:
             perms = await self.oc.permissions(directory)
@@ -801,7 +814,10 @@ class Controller:
         if perm.get("sessionID") != session_id:
             return {
                 "ok": False,
-                "error": f"permission {permission_id} belongs to session {perm.get('sessionID')}, not {session_id}",
+                "error": (
+                    f"permission {permission_id} belongs to session "
+                    f"{perm.get('sessionID')}, not {session_id}"
+                ),
             }
         # 2) post the decision
         try:

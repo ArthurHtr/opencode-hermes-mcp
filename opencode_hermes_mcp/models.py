@@ -138,7 +138,10 @@ def validate_question_answers(
     for i, (q, ans) in enumerate(zip(subqs, answers)):
         if isinstance(ans, str):
             ans = [ans]
-        if not isinstance(ans, list) or not ans or not all(isinstance(x, str) and x.strip() for x in ans):
+        valid = isinstance(ans, list) and ans and all(
+            isinstance(x, str) and x.strip() for x in ans
+        )
+        if not valid:
             return False, f"answer {i + 1} must be a non-empty string or list of strings"
         labels = [o.get("label") for o in (q.get("options") or []) if o.get("label")]
         custom = bool(q.get("custom"))

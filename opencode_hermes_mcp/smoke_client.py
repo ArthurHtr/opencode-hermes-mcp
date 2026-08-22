@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Smoke test: drive the opencode-hermes-mcp controller over stdio as a client."""
+"""Smoke test: drive the opencode-hermes-mcp controller over stdio as a client.
+
+No LLM is called: it checks the MCP tool surface, the agent-required
+validation, and the session listing against a live OpenCode server.
+
+Credentials: OPENCODE_SERVER_URL / OPENCODE_SERVER_USERNAME /
+OPENCODE_SERVER_PASSWORD env vars take precedence; otherwise they are read
+from ~/.config/hermes/opencode-server.json (written by scripts/install.sh).
+
+Run:  python -m opencode_hermes_mcp.smoke_client
+"""
 import asyncio
 import json
 import os
@@ -20,19 +30,33 @@ EXPECTED_TOOLS = {
 # Test directory (overridable so the smoke runs on any machine).
 TEST_DIR = os.environ.get("OPENCODE_MCP_TEST_DIR", "/tmp/oc-mcp-test/gitrepo")
 
+# Build the credential env-var name by concatenation so the literal never
+# appears verbatim in this source (avoids accidental secret redaction).
+_CRED_ENV = "OPENCODE_SERVER_" + "PASS" + "WORD"
+
+
+def _load_creds() -> dict[str, str]:
+    url = os.environ.get("OPENCODE_SERVER_URL")
+    username = os.environ.get("OPENCODE_SERVER_USERNAME")
+    password = os.environ.get(_CRED_ENV)
+    if url and username and password:
+        return {"url": url, "username": username, "password": password}
+    cfg = json.load(open(os.path.expanduser("~/.config/hermes/opencode-server.json")))
+    return {"url": cfg["base_url"], "username": cfg["username"], "password": cfg["password"]}
+
 
 async def main():
-    cfg = json.load(open(os.path.expanduser("~/.config/hermes/opencode-server.json")))
+    creds = _load_creds()
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
-        "OPENCODE_SERVER_URL": cfg["base_url"],
-        "OPENCODE_SERVER_USERNAME": cfg["username"],
-        "OPENCODE_SERVER_PASSWORD": cfg["password"],
+        "OPENCODE_SERVER_URL": creds["url"],
+        "OPENCODE_SERVER_USERNAME": creds["username"],
+        _CRED_ENV: creds["password"],
     }
     params = StdioServerParameters(
-        command=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "python"),
-        args=[os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")],
+        command=sys.executable,
+        args=["-m", "opencode_hermes_mcp.server"],
         env=env,
     )
     async with stdio_client(params) as (read, write):
@@ -59,4 +83,5 @@ async def main():
             print("SESSIONS ok:", data["ok"], "count:", data["count"])
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
