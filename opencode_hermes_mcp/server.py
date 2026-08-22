@@ -32,15 +32,14 @@ verified against the installed binary — not the web docs.
 # parameter annotations at runtime to detect the Context injection point, and
 # stringified annotations break that detection.
 
-import asyncio
 import os
 from contextlib import asynccontextmanager
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from client import OpenCode
-from controller import DEFAULT_RUN_TIMEOUT, Controller
+from .client import OpenCode
+from .controller import DEFAULT_RUN_TIMEOUT, Controller
 
 OC = OpenCode()
 CTRL = Controller(OC)

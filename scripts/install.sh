@@ -111,7 +111,7 @@ while [ $# -gt 0 ]; do
 done
 case "$PORT" in ''|*[!0-9]*) die "--port must be a number (got: $PORT)" ;; esac
 
-[ -f "$REPO/server.py" ] || die "repo layout unexpected (no $REPO/server.py)"
+[ -f "$REPO/opencode_hermes_mcp/server.py" ] || die "repo layout unexpected (no $REPO/opencode_hermes_mcp/server.py)"
 log "repo: $REPO"
 [ "$SANDBOX" -eq 1 ] && warn "sandbox mode: targets redirected to $HOME_DIR"
 [ "$DRY_RUN" -eq 1 ] && warn "dry-run mode: no changes will be made"
@@ -274,7 +274,7 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-# 3. Venv + mcp==1.12.4
+# 3. Venv + package (mcp==1.12.4 pinned)
 # --------------------------------------------------------------------------- #
 VENV="$REPO/.venv"
 VENV_PY="$VENV/bin/python"
@@ -302,6 +302,19 @@ else
     run "$VENV_PY" -m pip install "mcp==1.12.4"
   fi
   INSTALLED+=("mcp==1.12.4")
+fi
+if "$VENV_PY" -c 'import opencode_hermes_mcp' >/dev/null 2>&1; then
+  log "deps: opencode-hermes-mcp already installed in $VENV"
+  SKIPPED+=("opencode-hermes-mcp package (already installed)")
+else
+  if command -v uv >/dev/null 2>&1; then
+    log "deps: installing opencode-hermes-mcp (uv pip install -e .)"
+    run uv pip install --python "$VENV_PY" -e "$REPO"
+  else
+    log "deps: installing opencode-hermes-mcp (pip install -e .)"
+    run "$VENV_PY" -m pip install -e "$REPO"
+  fi
+  INSTALLED+=("opencode-hermes-mcp (editable install, mcp==1.12.4 pinned)")
 fi
 
 # --------------------------------------------------------------------------- #
@@ -417,7 +430,6 @@ set -euo pipefail
 
 CFG="\${OPENCODE_SERVER_CREDENTIALS:-\$HOME/.config/hermes/opencode-server.json}"
 VENV_PY="$REPO/.venv/bin/python"
-SERVER="$REPO/server.py"
 
 # Read url/username/password from the JSON secret file.
 eval "\$(python3 - "\$CFG" <<'PY'
@@ -431,7 +443,7 @@ print(f"export OPENCODE_SERVER_{'PASS'+'WORD'}={shlex.quote(pw)}")
 PY
 )"
 
-exec "\$VENV_PY" "\$SERVER"
+exec "\$VENV_PY" -m opencode_hermes_mcp.server
 EOF
 log "launchers: writing $SRV_LAUNCH"
 write_file "$SRV_LAUNCH" <<EOF
@@ -553,7 +565,7 @@ PY
   done
   [ "$healthy" -eq 1 ] || die "OpenCode server not healthy after 30s — check: systemctl --user status opencode-server"
   log "verification: server healthy — running smoke_client.py"
-  if ! SMOKE_OUT="$("$VENV_PY" "$REPO/smoke_client.py" 2>&1)"; then
+  if ! SMOKE_OUT="$("$VENV_PY" -m opencode_hermes_mcp.smoke_client 2>&1)"; then
     printf '%s\n' "$SMOKE_OUT"
     die "smoke test failed (non-zero exit)"
   fi

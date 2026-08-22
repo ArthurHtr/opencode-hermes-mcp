@@ -64,7 +64,9 @@ class OpenCode:
         except httpx.HTTPError as exc:
             raise OpenCodeError(f"HTTP error talking to OpenCode server: {exc}") from exc
         if r.status_code == 401 or r.status_code == 403:
-            raise OpenCodeError("authentication failed (401/403) — check credentials", status=r.status_code)
+            raise OpenCodeError(
+                "authentication failed (401/403) — check credentials", status=r.status_code
+            )
         if r.status_code >= 400:
             try:
                 payload = r.json()
@@ -83,7 +85,8 @@ class OpenCode:
             return r.text
 
     async def _get(self, path: str, **params: Any) -> Any:
-        return await self._request("GET", path, params={k: v for k, v in params.items() if v is not None})
+        clean = {k: v for k, v in params.items() if v is not None}
+        return await self._request("GET", path, params=clean)
 
     async def _post(
         self,
@@ -230,7 +233,9 @@ class OpenCode:
     ) -> None:
         """POST /question/{id}/reply — raises OpenCodeError on failure
         (404 = question no longer pending, 400 = invalid answers)."""
-        await self._post(f"/question/{req_id}/reply", body={"answers": answers}, directory=directory)
+        await self._post(
+            f"/question/{req_id}/reply", body={"answers": answers}, directory=directory
+        )
 
     async def reject_question(self, req_id: str, directory: str | None = None) -> bool:
         try:
