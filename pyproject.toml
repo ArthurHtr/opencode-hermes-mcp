@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencode-hermes-mcp"
+version = "0.1.0"
+description = "Deterministic MCP controller between Hermes (supervisor LLM) and the permanent OpenCode server. Pinned to OpenCode 1.18.18."
+requires-python = ">=3.11"
+dependencies = [
+    "mcp==1.12.4",
+]
+
+# Flat layout: the modules live at the repo root (server.py, controller.py,
+# client.py, models.py, smoke_client.py). No package restructuring — the
+# launcher execs $REPO/server.py directly; `pip install -e .` exists to
+# resolve the `mcp` dependency into the venv.
+[tool.setuptools]
+py-modules = ["server", "controller", "client", "models", "smoke_client"]

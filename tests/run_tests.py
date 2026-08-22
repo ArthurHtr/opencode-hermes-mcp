@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Integration test suite for opencode-hermes-mcp (OpenCode 1.18.18 live).
 
-Run:  ~/.local/share/opencode-hermes-mcp/.venv/bin/python tests/run_tests.py [name-filter]
+Run (from the repo root):  .venv/bin/python tests/run_tests.py [name-filter]
 
 Each test drives the controller over MCP stdio exactly like Hermes does.
 Tests are sequential (one OpenCode turn at a time — the controller enforces it
 anyway). LLM turns use the local provider only.
+
+Test directories are overridable via env (portable across machines):
+  OPENCODE_MCP_TEST_DIR     default /tmp/oc-mcp-test/gitrepo
+  OPENCODE_MCP_RESEARCH_DIR default /tmp/oc-mcp-test/research-repo
 """
 from __future__ import annotations
 
@@ -22,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mcp import ClientSession, StdioServerParameters  # noqa: E402
 from mcp.client.stdio import stdio_client  # noqa: E402
 
-REPO = "/tmp/oc-mcp-test/gitrepo"
+REPO = os.environ.get("OPENCODE_MCP_TEST_DIR", "/tmp/oc-mcp-test/gitrepo")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTROLLER = os.path.join(ROOT, "server.py")
 VENV_PY = os.path.join(ROOT, ".venv", "bin", "python")
@@ -91,7 +95,9 @@ async def spawn_controller(pid_file: str | None = None) -> ControllerHandle:
     env = cfg_env()
     if pid_file:
         env["OPENCODE_MCP_PID_FILE"] = pid_file
-    stderr_log = open("/tmp/oc-mcp-test/ctrl_stderr.log", "ab")
+    stderr_path = "/tmp/oc-mcp-test/ctrl_stderr.log"
+    os.makedirs(os.path.dirname(stderr_path), exist_ok=True)
+    stderr_log = open(stderr_path, "ab")
     params = StdioServerParameters(command=VENV_PY, args=[CONTROLLER], env=env)
     cm = stdio_client(params, errlog=stderr_log)
     read, write = await cm.__aenter__()
@@ -581,6 +587,7 @@ async def test_sse_kill_and_restart():
     then resume from a FRESH controller process — the turn must complete via
     opencode_run(session_id=...) resume semantics (no prompt resubmission)."""
     pid_file = "/tmp/oc-mcp-test/ctrl.pid"
+    os.makedirs(os.path.dirname(pid_file), exist_ok=True)
     if os.path.exists(pid_file):
         os.remove(pid_file)
     for f in (f"kill_{c}.txt" for c in "abcdefgh"):
@@ -787,7 +794,7 @@ async def test_output_limit_classification():
           classify_length_finish(empty_diff, long_text) == "completed")
 
 
-RESEARCH_REPO = "/tmp/oc-mcp-test/research-repo"
+RESEARCH_REPO = os.environ.get("OPENCODE_MCP_RESEARCH_DIR", "/tmp/oc-mcp-test/research-repo")
 
 
 async def test_custom_agent_e2e():
@@ -901,10 +908,13 @@ async def _kill_orphan_controllers() -> None:
     breaks tests that fetch messages/status via their own client. The test
     process itself is run_tests.py, so this is safe.
     """
+    import re
     import subprocess
     try:
+        # Match this repo's controller process (portable across machines).
+        pattern = re.escape(os.path.dirname(CONTROLLER)) + r"/server[.]py"
         out = subprocess.run(
-            ["pgrep", "-f", "share/opencode-hermes-mcp/server[.]py"],
+            ["pgrep", "-f", pattern],
             capture_output=True, text=True, timeout=10,
         ).stdout.split()
         for pid in out:

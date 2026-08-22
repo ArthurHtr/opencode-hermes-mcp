@@ -17,6 +17,9 @@ EXPECTED_TOOLS = {
     "opencode_sessions",
 }
 
+# Test directory (overridable so the smoke runs on any machine).
+TEST_DIR = os.environ.get("OPENCODE_MCP_TEST_DIR", "/tmp/oc-mcp-test/gitrepo")
+
 
 async def main():
     cfg = json.load(open(os.path.expanduser("~/.config/hermes/opencode-server.json")))
@@ -42,7 +45,7 @@ async def main():
             print("tool surface OK (exactly the 6 expected tools)")
 
             # agent required?
-            r = await session.call_tool("opencode_run", {"directory": "/tmp/oc-mcp-test/gitrepo", "task": "x"})
+            r = await session.call_tool("opencode_run", {"directory": TEST_DIR, "task": "x"})
             try:
                 data = json.loads(r.content[0].text)
             except Exception:
@@ -50,7 +53,7 @@ async def main():
             print("run without agent ->", json.dumps(data)[:200])
 
             r = await session.call_tool(
-                "opencode_sessions", {"directory": "/home/arthur/gitlab/erdos-moser-equation"}
+                "opencode_sessions", {"directory": TEST_DIR}
             )
             data = json.loads(r.content[0].text)
             print("SESSIONS ok:", data["ok"], "count:", data["count"])
