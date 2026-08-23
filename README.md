@@ -145,6 +145,27 @@ The launcher reads the OpenCode server credentials from
 `python -m opencode_hermes_mcp.server` in the repo venv — `config.yaml` stays
 secret-free.
 
+## TUI attach helpers (watch OpenCode live)
+
+`install.sh` also drops two helpers into `~/.local/bin/` (sources:
+`scripts/helpers/`):
+
+```sh
+ocattach <repo-abs> [ses_...]   # open the OpenCode TUI on a repo / session
+oc-current                      # attach to the session Hermes is supervising NOW
+```
+
+- `ocattach` opens the OpenCode TUI (`opencode attach`) against the permanent
+  server `:4096` — no tmux needed. Without a session id it opens the latest
+  session / lets you pick one.
+- `oc-current` reads the newest `~/.local/state/opencode-hermes-mcp/turn_*.json`
+  (the controller's in-flight turn state) and attaches to that session — use
+  it while Hermes is driving OpenCode, to watch the reasoning live.
+
+Both read the server credentials from `~/.config/hermes/opencode-server.json`
+(same source as the controller launcher). **Do not press Esc/Ctrl+C in the TUI
+while a turn is active** — that aborts the in-flight turn on the OpenCode side.
+
 ## Upgrade / uninstall
 
 ```sh
@@ -202,6 +223,7 @@ smoke test and the integration suite, and the contribution conventions.
 | `opencode_hermes_mcp/smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
 | `tests/run_tests.py` | full integration suite (live LLM turns) |
 | `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle |
+| `scripts/helpers/ocattach` / `oc-current` | TUI attach helpers (installed to `~/.local/bin/`) |
 
 ## License
 

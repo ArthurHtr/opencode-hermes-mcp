@@ -76,7 +76,7 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-# 2. Launchers
+# 2. Launchers + TUI attach helpers
 # --------------------------------------------------------------------------- #
 for launcher in "$HOME_DIR/.local/bin/opencode-mcp-launch.sh" "$HOME_DIR/.local/bin/opencode-server-launch.sh"; do
   if [ -f "$launcher" ]; then
@@ -84,6 +84,14 @@ for launcher in "$HOME_DIR/.local/bin/opencode-mcp-launch.sh" "$HOME_DIR/.local/
     REMOVED+=("launcher $launcher")
   else
     KEPT+=("launcher (not present) $launcher")
+  fi
+done
+for helper in "$HOME_DIR/.local/bin/ocattach" "$HOME_DIR/.local/bin/oc-current"; do
+  if [ -f "$helper" ]; then
+    rm -f "$helper"
+    REMOVED+=("helper $helper")
+  else
+    KEPT+=("helper (not present) $helper")
   fi
 done
 
