@@ -471,6 +471,22 @@ EOF
 [ "$DRY_RUN" -eq 0 ] && chmod +x "$MCP_LAUNCH" "$SRV_LAUNCH"
 INSTALLED+=("launchers (opencode-mcp-launch.sh + opencode-server-launch.sh)")
 
+# TUI attach helpers (ocattach / oc-current) — watch OpenCode live.
+HELPERS_SRC="$REPO/scripts/helpers"
+if [ -d "$HELPERS_SRC" ]; then
+  for helper in ocattach oc-current; do
+    dst="$HOME_DIR/.local/bin/$helper"
+    if [ -f "$dst" ]; then
+      SKIPPED+=("helper $helper (already present)")
+    else
+      log "helpers: writing $dst"
+      run cp "$HELPERS_SRC/$helper" "$dst"
+      [ "$DRY_RUN" -eq 0 ] && chmod +x "$dst"
+      INSTALLED+=("helper $helper")
+    fi
+  done
+fi
+
 # --------------------------------------------------------------------------- #
 # 7. systemd user service
 # --------------------------------------------------------------------------- #

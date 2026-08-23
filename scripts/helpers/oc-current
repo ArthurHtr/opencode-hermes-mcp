@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# oc-current — attach the OpenCode TUI to the session CURRENTLY supervised by
+# Hermes (the controller MCP's in-flight turn).
+#
+# The controller keeps the active turn's state in
+# ~/.local/state/opencode-hermes-mcp/turn_<session>.json; this script takes
+# the most recent one and attaches to it. Use it while Hermes is driving
+# OpenCode. Without an active turn it prints a message (no attach).
+#
+# Usage: oc-current
+#
+# NB: while a turn is active, do NOT press Esc/Ctrl+C in the TUI — that
+# ABORTS the in-flight turn on the OpenCode side.
+#
+# Env overrides:
+#   OPENCODE_MCP_STATE_DIR       controller state dir (default ~/.local/state/opencode-hermes-mcp)
+#   OPENCODE_SERVER_CREDENTIALS  path to the server credentials JSON
+#   OPENCODE_SERVER_URL          server base URL (default http://127.0.0.1:4096)
+#   OPENCODE_BIN                 path to the opencode binary
+set -euo pipefail
+
+OC_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
+URL="${OPENCODE_SERVER_URL:-http://127.0.0.1:4096}"
+STATE_DIR="${OPENCODE_MCP_STATE_DIR:-$HOME/.local/state/opencode-hermes-mcp}"
+CFG="${OPENCODE_SERVER_CREDENTIALS:-$HOME/.config/hermes/opencode-server.json}"
+
+STATE=$(ls -t "$STATE_DIR"/turn_*.json 2>/dev/null | head -1 || true)
+if [ -z "$STATE" ]; then
+    echo "No OpenCode turn currently supervised by Hermes."
+    echo "(The controller removes the turn state at the end of the turn.)"
+    echo "To attach manually: ocattach <repo-abs> [ses_...]"
+    exit 1
+fi
+
+SID=$(jq -r '.session_id' "$STATE")
+DIR=$(jq -r '.directory' "$STATE")
+AGENT=$(jq -r '.agent // empty' "$STATE")
+
+[ -f "$CFG" ] || { echo "oc-current: server credentials not found: $CFG (run scripts/install.sh first)" >&2; exit 1; }
+[ -x "$OC_BIN" ] || { echo "oc-current: opencode binary not found: $OC_BIN" >&2; exit 1; }
+export OPENCODE_SERVER_USERNAME="$(jq -r '.username' "$CFG")"
+export OPENCODE_SERVER_PASSWORD="$(jq -r '.password' "$CFG")"
+
+echo "Session : $SID"
+echo "Repo    : $DIR"
+[ -n "$AGENT" ] && echo "Agent   : $AGENT"
+echo
+echo "NB: do not press Esc/Ctrl+C while the turn is active (aborts the turn)."
+echo
+
+exec "$OC_BIN" attach "$URL" --dir "$DIR" -s "$SID"

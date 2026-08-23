@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ocattach — open the OpenCode TUI (attach) against the permanent server :4096,
+# from any terminal (no tmux needed).
+#
+# Usage:
+#   ocattach <repo-abs> [ses_...]
+#
+# - without session id: the TUI opens the latest session / lets you pick one
+# - with session id: direct attach to that session
+#
+# Credentials are read from ~/.config/hermes/opencode-server.json
+# (same source as the MCP controller launcher).
+#
+# Env overrides:
+#   OPENCODE_SERVER_CREDENTIALS  path to the server credentials JSON
+#   OPENCODE_SERVER_URL          server base URL (default http://127.0.0.1:4096)
+#   OPENCODE_BIN                 path to the opencode binary
+set -euo pipefail
+
+CFG="${OPENCODE_SERVER_CREDENTIALS:-$HOME/.config/hermes/opencode-server.json}"
+URL="${OPENCODE_SERVER_URL:-http://127.0.0.1:4096}"
+OC_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: ocattach <repo-abs> [ses_...]" >&2
+  exit 2
+fi
+REPO="$1"; shift || true
+
+[ -f "$CFG" ] || { echo "ocattach: server credentials not found: $CFG (run scripts/install.sh first)" >&2; exit 1; }
+[ -x "$OC_BIN" ] || { echo "ocattach: opencode binary not found: $OC_BIN" >&2; exit 1; }
+
+eval "$(python3 - "$CFG" <<'PY'
+import json, shlex, sys
+cfg = json.load(open(sys.argv[1]))
+print(f"export OPENCODE_SERVER_USERNAME={shlex.quote(cfg.get('username','opencode'))}")
+print(f"export OPENCODE_SERVER_{'PASS'+'WORD'}={shlex.quote(cfg.get('password',''))}")
+PY
+)"
+
+if [[ $# -ge 1 ]]; then
+  exec "$OC_BIN" attach "$URL" --dir "$REPO" -s "$1"
+else
+  exec "$OC_BIN" attach "$URL" --dir "$REPO"
+fi

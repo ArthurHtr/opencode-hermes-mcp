@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-23
+
+### Added
+
+- TUI attach helpers `ocattach` and `oc-current` (sources in
+  `scripts/helpers/`, installed to `~/.local/bin/` by `install.sh`, removed
+  by `uninstall.sh`): `ocattach <repo> [ses_...]` opens the OpenCode TUI on a
+  repo/session; `oc-current` attaches to the session the controller is
+  supervising right now (reads the newest
+  `~/.local/state/opencode-hermes-mcp/turn_*.json`). Both read the server
+  credentials from `~/.config/hermes/opencode-server.json`.
+
 ## [0.2.0] - 2026-08-22
 
 ### Added
