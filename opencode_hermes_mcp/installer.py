@@ -545,7 +545,7 @@ def step2_binary(state: State) -> None:
         state.console.print("[dim]binary: skipped (sandbox mode — machine-level tool)[/dim]")
         state.skipped.append("opencode binary (sandbox mode)")
         return
-    if oc_bin.is_file() and oc_bin.access(os.X_OK):
+    if oc_bin.is_file() and os.access(oc_bin, os.X_OK):
         try:
             ver = subprocess.run(
                 [str(oc_bin), "--version"], capture_output=True, text=True
