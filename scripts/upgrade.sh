@@ -4,19 +4,28 @@
 # Default: update the CONTROLLER (git pull + venv deps + service restart +
 # smoke test). The OpenCode binary is NOT touched by default.
 #
-#   --binary [VERSION]   upgrade the OpenCode BINARY instead (default: latest
-#                        via the official script). Prints an explicit warning:
-#                        the controller is validated for 1.18.18 only — after
-#                        a binary upgrade, re-validate with tests/run_tests.py.
+#   --binary             install the PINNED OpenCode version (read from
+#                        opencode_hermes_mcp/pin.txt). Idempotent: if the
+#                        installed binary is already at the pin, nothing is
+#                        done; if it is at another version, it is aligned on
+#                        the pin (upgrade or downgrade).
+#   --binary latest      EXPLICIT opt-in to the LATEST OpenCode version
+#                        (bleeding edge). The controller is validated for the
+#                        pin only — re-validate with tests/run_tests.py before
+#                        any production use.
+#   --binary X.Y.Z       install the requested version; same warning when
+#                        X.Y.Z != pin.
 #
 # Testing: set OPENCODE_MCP_HOME=/tmp/sandbox to redirect the targets
 # (systemctl calls are skipped in sandbox mode).
 set -euo pipefail
 
-# PINNED — the controller is validated against this OpenCode version only.
-OPENCODE_VERSION="1.18.18"
-
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# PINNED — the controller is validated against this OpenCode version only.
+# Single source of truth: opencode_hermes_mcp/pin.txt (fallback below).
+OPENCODE_VERSION="$(head -n1 "$REPO/opencode_hermes_mcp/pin.txt" 2>/dev/null | tr -d '[:space:]')"
+OPENCODE_VERSION="${OPENCODE_VERSION:-1.18.21}"
 HOME_DIR="${OPENCODE_MCP_HOME:-$HOME}"
 SANDBOX=0
 [ "$HOME_DIR" != "$HOME" ] && SANDBOX=1
@@ -39,9 +48,16 @@ Usage: upgrade.sh [--binary [VERSION]]
 Default: update the controller (git pull + venv deps + restart + smoke test).
 
 Options:
-  --binary [VERSION]   upgrade the OpenCode binary (default: latest).
-                       WARNING: the controller is validated for $OPENCODE_VERSION
-                       only — re-validate with tests/run_tests.py afterwards.
+  --binary             install the PINNED OpenCode version (read from
+                       opencode_hermes_mcp/pin.txt). Idempotent: no-op if the
+                       installed binary is already at the pin; otherwise it is
+                       aligned on the pin (upgrade or downgrade).
+  --binary latest      EXPLICIT opt-in to the LATEST OpenCode version
+                       (bleeding edge).
+  --binary X.Y.Z       install the requested version.
+                       WARNING (latest, or X.Y.Z != pin): the controller is
+                       validated for $OPENCODE_VERSION only — re-validate with
+                       tests/run_tests.py before any production use.
   -h, --help           this help
 
 Env:
@@ -121,24 +137,50 @@ restart_service() {
 
 if [ "$BINARY_MODE" -eq 1 ]; then
   # --------------------------------------------------------------------- #
-  # Binary upgrade (explicit opt-in — the controller is pinned-validated)
+  # Binary upgrade.
+  #   --binary          -> the validated PIN (idempotent, never bleeding edge)
+  #   --binary latest   -> explicit opt-in to the latest version
+  #   --binary X.Y.Z    -> the requested version
+  # The controller is validated for the pin only.
   # --------------------------------------------------------------------- #
-  warn "AVERTISSEMENT : le controller est validé pour $OPENCODE_VERSION ;"
-  warn "après un upgrade du binaire, re-valider le controller (tests/run_tests.py)."
   command -v curl >/dev/null 2>&1 || die "curl is required to install the OpenCode binary"
-  if [ -n "$BINARY_VERSION" ]; then
+  CURRENT_VER="$("$OC_BIN" --version 2>/dev/null || true)"
+  if [ -z "$BINARY_VERSION" ]; then
+    # Default: align the binary on the validated pin (never bleeding edge).
+    if [ "$CURRENT_VER" = "$OPENCODE_VERSION" ]; then
+      log "binary: already at the pinned version $OPENCODE_VERSION — nothing to do"
+      exit 0
+    fi
+    if [ -n "$CURRENT_VER" ]; then
+      warn "binary: installed version $CURRENT_VER != validated pin $OPENCODE_VERSION — aligning on the pin"
+    else
+      log "binary: no OpenCode binary found — installing the validated pin $OPENCODE_VERSION"
+    fi
+    log "binary: installing OpenCode $OPENCODE_VERSION (pinned) via official script"
+    bash -c "curl -fsSL https://opencode.ai/install | bash -s -- --version $OPENCODE_VERSION"
+  elif [ "$BINARY_VERSION" = "latest" ]; then
+    warn "AVERTISSEMENT : le controller est validé pour $OPENCODE_VERSION uniquement —"
+    warn "après cette opération, re-valider impérativement avec tests/run_tests.py"
+    warn "avant toute utilisation en production."
+    log "binary: installing the LATEST OpenCode via official script (explicit opt-in)"
+    bash -c "curl -fsSL https://opencode.ai/install | bash"
+  else
+    if [ "$BINARY_VERSION" != "$OPENCODE_VERSION" ]; then
+      warn "AVERTISSEMENT : le controller est validé pour $OPENCODE_VERSION uniquement —"
+      warn "après cette opération, re-valider impérativement avec tests/run_tests.py"
+      warn "avant toute utilisation en production."
+    fi
     log "binary: installing OpenCode $BINARY_VERSION via official script"
     bash -c "curl -fsSL https://opencode.ai/install | bash -s -- --version $BINARY_VERSION"
-  else
-    log "binary: installing the LATEST OpenCode via official script"
-    bash -c "curl -fsSL https://opencode.ai/install | bash"
   fi
   NEW_VER="$("$OC_BIN" --version 2>/dev/null || true)"
   log "binary: installed version = ${NEW_VER:-unknown}"
   restart_service
   wait_health
   run_smoke
-  warn "Rappel : re-validez le controller avec tests/run_tests.py (validé pour $OPENCODE_VERSION)."
+  if [ "$NEW_VER" != "$OPENCODE_VERSION" ]; then
+    warn "Rappel : le binaire ($NEW_VER) diffère du pin validé ($OPENCODE_VERSION) — re-validez impérativement avec tests/run_tests.py avant toute utilisation en production."
+  fi
 else
   # --------------------------------------------------------------------- #
   # Controller upgrade (default)

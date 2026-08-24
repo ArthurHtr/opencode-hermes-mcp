@@ -1,6 +1,6 @@
 """Async HTTP/SSE client for the permanent OpenCode server.
 
-Contract = the live server's /doc (OpenAPI) for OpenCode 1.18.18, verified by
+Contract = the live server's /doc (OpenAPI) for OpenCode 1.18.21, verified by
 probing — NOT the web docs. Non-obvious behaviours (directory scoping, etc.)
 are documented in the skill reference `mcp-controller.md`.
 """

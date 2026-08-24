@@ -260,6 +260,6 @@ tokens spent watching.
 - `<CLONE>` — absolute path of the opencode-hermes-mcp clone
   (e.g. `~/gitlab/opencode-hermes-mcp`).
 - `<OPENCODE_VERSION>` — the pinned OpenCode binary version
-  (e.g. `1.18.18`).
+  (e.g. `1.18.21`).
 - Agent names / permission pre-allow lists — adapt to your
   `~/.config/opencode/opencode.json`.

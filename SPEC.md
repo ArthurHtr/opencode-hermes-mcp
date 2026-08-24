@@ -5,7 +5,7 @@ Le code de production est déjà seedé (server.py, controller.py, client.py,
 models.py, smoke_client.py, tests/run_tests.py). Ta mission : en faire un
 package installable + les scripts install/uninstall/upgrade. **Ne modifie PAS
 la logique de server.py / controller.py / client.py / models.py** — ce sont
-des sémantiques API validées en production contre OpenCode 1.18.18.
+des sémantiques API validées en production contre OpenCode 1.18.21.
 
 ## Contexte (ce que le système fait)
 
@@ -27,11 +27,13 @@ Hermes (LLM) --MCP stdio--> server.py (FastMCP, 6 tools) --HTTP+SSE--> OpenCode 
 
 ## Version pin
 
-**OpenCode binaire : PINNÉ à `1.18.18`** (version validée du controller).
-Le controller n'est PAS validé contre d'autres versions. Définis une
-constante `OPENCODE_VERSION="1.18.18"` en tête des scripts (install +
-upgrade). L'upgrade du binaire est un flag explicite `--binary` (voir plus
-bas), jamais le comportement par défaut.
+**OpenCode binaire : PINNÉ à `1.18.21`** (version validée du controller).
+Le controller n'est PAS validé contre d'autres versions. Le pin est la
+**single source of truth** dans `opencode_hermes_mcp/pin.txt` (une ligne,
+sans préfixe `v`) ; `installer.py` (via `pinned_version()`) et
+`scripts/upgrade.sh` le lisent, avec fallback sur la constante en dur quand
+le fichier est absent (installs pip). L'upgrade du binaire est un flag
+explicite `--binary` (voir plus bas), jamais le comportement par défaut.
 
 ## Livrables
 
@@ -52,10 +54,11 @@ Comportement (flags : `--yes` pour non-interactif, `--port N` défaut 4096,
    env `UNSLOTH_API_KEY`), modèle (défaut `unsloth/unsloth/Qwen3.8-27B-GGUF`).
    Les valeurs peuvent aussi venir des env `OPENCODE_LLM_BASE_URL`,
    `UNSLOTH_API_KEY`, `OPENCODE_LLM_MODEL`.
-2. **Binaire OpenCode** : installer la version PINNÉE via le script officiel
-   `curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.18`
+2. **Binaire OpenCode** : installer la version PINNÉE (lue de
+   `opencode_hermes_mcp/pin.txt`) via le script officiel
+   `curl -fsSL https://opencode.ai/install | bash -s -- --version <pin>`
    (pose `~/.opencode/bin/opencode`). Si le binaire existe déjà ET
-   `opencode --version` == 1.18.18 → skip (message). `--skip-binary` force
+   `opencode --version` == pin → skip (message). `--skip-binary` force
    le skip.
 3. **Venv** : `python3 -m venv $REPO/.venv` (ou réutiliser si présent) +
    installation de `mcp==1.12.4` (préférer `uv pip install --python
@@ -115,10 +118,12 @@ Par défaut (mise à jour du controller, PAS du binaire) :
 2. rafraîchir les dépendances du venv (`pip install -e .` / uv)
 3. `systemctl --user restart opencode-server`
 4. re-lancer `smoke_client.py` (exiger OK)
-Flag `--binary [VERSION]` : monter le binaire OpenCode (défaut : dernière
-version via le script officiel sans `--version`) — avec un Avertissement
-explicite avant : « le controller est validé pour 1.18.18 ; après un
-upgrade du binaire, re-valider le controller (tests/run_tests.py) ».
+Flag `--binary` : installer la version PINNÉE (idempotent, jamais le
+bleeding edge). `--binary latest` : opt-in explicite vers la dernière
+version ; `--binary X.Y.Z` : la version demandée. Pour tout ce qui n'est
+pas le pin, un avertissement explicite : « le controller est validé pour le
+pin uniquement ; après un upgrade du binaire, re-valider le controller
+(tests/run_tests.py) ».
 
 ### 5. Fixes de portabilité (les seuls changements de code autorisés)
 - `smoke_client.py` : le chemin du repo doit être relatif au fichier
@@ -137,7 +142,8 @@ upgrade du binaire, re-valider le controller (tests/run_tests.py) ».
 ### 6. `README.md` (remplace celui auto-généré)
 - architecture (le schéma 3 couches), prérequis (Hermes installé, python3
   >=3.11, accès réseau), installation en 2 commandes, usage (Hermes délègue
-  via opencode_run), upgrade/uninstall, la règle du pin 1.18.18 + procédure
+  via opencode_run), upgrade/uninstall, la règle du pin (single source of
+  truth dans `opencode_hermes_mcp/pin.txt`) + procédure
   de re-validation après upgrade binaire, les 3 timeouts (controller 3600 /
   MCP 14400 / hermes tools 14400) en un paragraphe.
 

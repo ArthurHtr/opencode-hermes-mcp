@@ -46,7 +46,7 @@ Why a controller instead of calling the OpenCode HTTP API directly?
 
 | File | Purpose |
 | --- | --- |
-| `~/.opencode/bin/opencode` | OpenCode binary (pinned, 1.18.18) |
+| `~/.opencode/bin/opencode` | OpenCode binary (pinned, 1.18.21) |
 | `<clone>/.venv/` | venv with `mcp==1.12.4`, `rich`, `pyyaml`, the editable package |
 | `~/.config/opencode/opencode.json` | OpenCode provider config (model, limits, agents, compaction) |
 | `~/.config/opencode/secrets/api-key` | LLM API key (mode 600), referenced as `{file:secrets/api-key}` |
@@ -94,7 +94,7 @@ if that block is valid for your Hermes version, you are done.
 
 1. **Prerequisites in place** (what the installer builds):
    - OpenCode binary: `curl -fsSL https://opencode.ai/install | bash`
-     (pin: `--version 1.18.18`).
+     (pin: `--version 1.18.21`).
    - A venv with the controller: `python3 -m venv <clone>/.venv &&
      <clone>/.venv/bin/pip install -e <clone>` (needs `mcp==1.12.4`).
    - OpenCode provider config + API key (`~/.config/opencode/...`).

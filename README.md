@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](#prerequisites)
-[![OpenCode](https://img.shields.io/badge/OpenCode-1.18.18%20(pinned)-brightgreen.svg)](#version-pin-opencode-11818)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.18.21%20(pinned)-brightgreen.svg)](#version-pin-opencode-11821)
 
 Deterministic MCP controller between **Hermes** (supervisor LLM) and the
 permanent **OpenCode** server. The controller is a state machine — no LLM —
@@ -192,7 +192,7 @@ while a turn is active** — that aborts the in-flight turn on the OpenCode side
 
 ```sh
 scripts/upgrade.sh            # controller only: git pull + venv deps + restart + smoke
-scripts/upgrade.sh --binary   # upgrade the OpenCode BINARY (latest) — see warning below
+scripts/upgrade.sh --binary   # install the PINNED OpenCode binary (idempotent) — see "Version pin" below
 scripts/uninstall.sh          # service, launchers, venv, hermes entry, credentials
 scripts/uninstall.sh --purge  # + OpenCode provider config + API key secret
 scripts/uninstall.sh --purge-binary  # + the OpenCode binary
@@ -201,22 +201,29 @@ scripts/uninstall.sh --purge-binary  # + the OpenCode binary
 `uninstall.sh` never touches the git clone, the OpenCode provider config, the
 API key secret, or the binary (unless the purge flags say so).
 
-## Version pin: OpenCode 1.18.18
+## Version pin: OpenCode 1.18.21
 
-The controller is **validated against OpenCode `1.18.18` only** (its endpoint
+The controller is **validated against OpenCode `1.18.21` only** (its endpoint
 contract was verified against that binary's live `/doc`, not the web docs).
-`install.sh` pins the binary to `1.18.18`; `upgrade.sh` never upgrades the
-binary by default.
+The pin is a **single source of truth** in `opencode_hermes_mcp/pin.txt`
+(one line, no `v` prefix): `installer.py` and `scripts/upgrade.sh` both read
+it, falling back to the built-in constant when the file is missing or empty
+(e.g. pip installs where the file is not shipped next to the code). `install.sh` pins
+the binary to that version; `upgrade.sh` never upgrades the binary by
+default.
 
-If you upgrade the binary (`scripts/upgrade.sh --binary [VERSION]`), the
-script warns you and you MUST re-validate the controller before trusting it:
+`scripts/upgrade.sh --binary` (no version) installs the pinned version and is
+idempotent (no-op if the binary is already at the pin). `--binary latest` is
+the explicit opt-in to the bleeding edge; `--binary X.Y.Z` installs the
+requested version. For anything other than the pin, the script warns you and
+you MUST re-validate the controller before trusting it:
 
 ```sh
 .venv/bin/python tests/run_tests.py
 ```
 
 (all checks must pass; the suite drives the controller over MCP stdio against
-the live server). If it fails, pin back: `scripts/upgrade.sh --binary 1.18.18`.
+the live server). If it fails, pin back: `scripts/upgrade.sh --binary`.
 
 ## Timeouts
 
@@ -245,6 +252,7 @@ smoke test and the integration suite, and the contribution conventions.
 | `opencode_hermes_mcp/smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
 | `tests/run_tests.py` | full integration suite (live LLM turns) |
 | `opencode_hermes_mcp/installer.py` | setup wizard (Python + rich; self-bootstrapping venv) |
+| `opencode_hermes_mcp/pin.txt` | the OpenCode version pin (single source of truth, one line) |
 | `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle (`install.sh` is a thin wrapper around the wizard) |
 | `scripts/helpers/ocattach` / `oc-current` | TUI attach helpers (installed to `~/.local/bin/`) |
 
