@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-24
+
+### Fixed
+
+- Removed the `Private :: Do Not Upload` classifier from `pyproject.toml` —
+  PyPI rejects uploads carrying it (HTTP 400), so the first `v0.4.0`
+  publish from GitHub Actions failed. No code change; the wheel is
+  otherwise identical to 0.4.0.
+
 ## [0.4.0] - 2026-08-24
 
 ### Added
