@@ -46,12 +46,20 @@ git clone <repo-url> opencode-hermes-mcp && cd opencode-hermes-mcp
 scripts/install.sh
 ```
 
-`install.sh` is idempotent — re-running it skips what is already in place.
+`scripts/install.sh` is a thin wrapper around the **setup wizard**
+(`opencode_hermes_mcp/installer.py`, Python + `rich`): banner, numbered
+steps, styled prompts, progress, and a summary panel. The wizard bootstraps
+itself — if the repo venv is missing (or lacks `rich` / `pyyaml` /
+`mcp==1.12.4` / the editable package), it creates it and re-execs, so a bare
+`python3` >= 3.11 is the only prerequisite.
+
+The install is idempotent — re-running it skips what is already in place.
 It installs the pinned OpenCode binary, the venv (the `opencode_hermes_mcp`
 package with `mcp==1.12.4` pinned), the LLM provider config + secret, the
 server credentials, the two launchers, the systemd user service, and patches
 `~/.hermes/config.yaml` (backup kept as `.bak`). It finishes with a health
-check + `python -m opencode_hermes_mcp.smoke_client` (must print
+check (bounded `curl --max-time 3`, last error surfaced) +
+`python -m opencode_hermes_mcp.smoke_client` (must print
 `tool surface OK`).
 
 ### LLM providers
@@ -100,7 +108,9 @@ OPENCODE_LLM_MODEL=claude-sonnet-4-5 scripts/install.sh --yes
 Flags: `--yes` (non-interactive, uses env `OPENCODE_PROVIDER` /
 `OPENCODE_LLM_BASE_URL` / `OPENCODE_API_KEY` / `OPENCODE_LLM_MODEL` /
 `OPENCODE_LLM_SPEED` / `OPENCODE_CONTEXT_LIMIT` / `OPENCODE_OUTPUT_LIMIT`),
-`--port N` (default 4096), `--skip-binary`, `--force-config`, `--dry-run`.
+`--port N` (default 4096), `--skip-binary`, `--force-config`, `--dry-run`,
+`--skip-verify` (skip the final health + smoke verification — useful for
+sandbox/CI).
 
 `UNSLOTH_API_KEY` is still accepted as a deprecated fallback for
 `OPENCODE_API_KEY` (existing scripts keep working).
@@ -222,7 +232,8 @@ smoke test and the integration suite, and the contribution conventions.
 | `opencode_hermes_mcp/models.py` | data helpers for turns / interactions |
 | `opencode_hermes_mcp/smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
 | `tests/run_tests.py` | full integration suite (live LLM turns) |
-| `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle |
+| `opencode_hermes_mcp/installer.py` | setup wizard (Python + rich; self-bootstrapping venv) |
+| `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle (`install.sh` is a thin wrapper around the wizard) |
 | `scripts/helpers/ocattach` / `oc-current` | TUI attach helpers (installed to `~/.local/bin/`) |
 
 ## License
