@@ -32,9 +32,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NoReturn
 
+# Fallback only — the single source of truth is opencode_hermes_mcp/pin.txt
+# (see pinned_version()). Needed for pip installs where pin.txt is not
+# shipped next to the code.
 OPENCODE_VERSION = "1.18.18"
 MCP_VERSION = "1.12.4"
 BOOTSTRAP_DEPS = ["mcp==1.12.4", "rich>=13", "pyyaml>=6"]
+
+
+def pinned_version() -> str:
+    """Return the pinned OpenCode version (single source of truth).
+
+    Reads the first line of ``opencode_hermes_mcp/pin.txt`` (stripped).
+    Falls back to ``OPENCODE_VERSION`` when the file is missing or empty.
+    """
+    pin_file = Path(__file__).parent / "pin.txt"
+    try:
+        lines = pin_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return OPENCODE_VERSION
+    return (lines[0].strip() if lines else "") or OPENCODE_VERSION
 
 DEFAULT_PROVIDER = "openai-compatible"
 DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
@@ -536,6 +553,7 @@ def step1_llm(state: State) -> Llm:
 
 
 def step2_binary(state: State) -> None:
+    version = pinned_version()
     oc_bin = Path.home() / ".opencode" / "bin" / "opencode"
     if state.skip_binary:
         state.console.print("[dim]binary: skipped (--skip-binary)[/dim]")
@@ -552,22 +570,22 @@ def step2_binary(state: State) -> None:
             ).stdout.strip()
         except OSError:
             ver = ""
-        if ver == OPENCODE_VERSION:
-            state.console.print(f"[dim]binary: already {OPENCODE_VERSION} — skipping[/dim]")
-            state.already.append(f"opencode binary (already {OPENCODE_VERSION})")
+        if ver == version:
+            state.console.print(f"[dim]binary: already {version} — skipping[/dim]")
+            state.already.append(f"opencode binary (already {version})")
             return
     if shutil.which("curl") is None:
         die(state, "curl is required to install the OpenCode binary")
     state.console.print(
-        f"[green]binary:[/green] installing OpenCode {OPENCODE_VERSION} "
+        f"[green]binary:[/green] installing OpenCode {version} "
         "(pinned) via official script"
     )
-    cmd = f"curl -fsSL https://opencode.ai/install | bash -s -- --version {OPENCODE_VERSION}"
+    cmd = f"curl -fsSL https://opencode.ai/install | bash -s -- --version {version}"
     if state.dry_run:
         state.console.print(f"[dim]would run: bash -c {shlex.quote(cmd)}[/dim]")
     else:
-        _run_streaming(state, ["bash", "-c", cmd], f"installing OpenCode {OPENCODE_VERSION}")
-    state.installed.append(f"opencode binary {OPENCODE_VERSION} (pinned)")
+        _run_streaming(state, ["bash", "-c", cmd], f"installing OpenCode {version}")
+    state.installed.append(f"opencode binary {version} (pinned)")
 
 
 def step3_venv(state: State) -> None:
@@ -882,7 +900,7 @@ def _banner(state: State) -> None:
     mode = " + ".join(modes) if modes else "normal"
     body = (
         f"[bold]opencode-hermes-mcp[/bold] v{__version__}\n"
-        f"OpenCode target: [bold]{OPENCODE_VERSION}[/bold] (pinned)\n"
+        f"OpenCode target: [bold]{pinned_version()}[/bold] (pinned)\n"
         f"mode: {mode}\n"
         f"repo: {state.repo}"
     )

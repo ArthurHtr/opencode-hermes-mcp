@@ -35,8 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   editable package, and re-execs itself. All flags, env vars, generated
   files (opencode.json, credentials, launchers, systemd unit, Hermes config
   patch) and the idempotent skip-if-present behavior are unchanged from the
-  former bash installer. `rich>=13` and `pyyaml>=6` are now package
-  dependencies.
+   former bash installer. `rich>=13` and `pyyaml>=6` are now package
+   dependencies.
+- The OpenCode pin is now a **single source of truth** in
+  `opencode_hermes_mcp/pin.txt` (one line, no `v` prefix): `installer.py`
+  (via `pinned_version()`) and `scripts/upgrade.sh` both read it, falling
+  back to `1.18.18` when the file is missing or empty (e.g. pip installs
+  where the file is not shipped next to the code).
+- `scripts/upgrade.sh --binary` without a version now installs the validated
+  PINNED version instead of the bleeding edge: it is idempotent (no-op when
+  the binary is already at the pin) and aligns the binary on the pin
+  (upgrade or downgrade) when it is at another version. `--binary latest`
+  remains the explicit opt-in to the latest version, and `--binary X.Y.Z`
+  installs the requested version — both warn that the controller is
+  validated for the pin only and must be re-validated with
+  `tests/run_tests.py` before any production use.
 
 ### Fixed
 
