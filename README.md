@@ -118,6 +118,18 @@ sandbox/CI).
 **A new Hermes session is required** after installation to load the MCP
 server.
 
+## Hermes integration (manual)
+
+The installer patches `~/.hermes/config.yaml` for you, but it does **not**
+install a Hermes skill on purpose (Hermes's skill layout may change). The
+package ships the full manual instead:
+
+- [`docs/hermes-integration.md`](docs/hermes-integration.md) — what the MCP
+  is for, the exact config entry written, manual integration (by hand), the
+  six tools, troubleshooting, uninstall.
+- [`docs/skill.example.md`](docs/skill.example.md) — a ready-to-copy Hermes
+  skill (the delegation protocol) to drop into `~/.hermes/skills/` and adapt.
+
 ## Usage
 
 Hermes delegates work through the MCP tools — no manual CLI needed:

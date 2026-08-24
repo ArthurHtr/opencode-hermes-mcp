@@ -917,6 +917,15 @@ def _summary(state: State, elapsed: float) -> None:
         "\nNOTE: a NEW Hermes session is required to load the MCP server\n", style="bold cyan"
     )
     text.append("(mcp_servers.opencode is read at session start).", style="bold cyan")
+    text.append(
+        "\nNext: docs/hermes-integration.md (manual) + docs/skill.example.md\n",
+        style="bold yellow",
+    )
+    text.append(
+        "(recommended: adapt the skill template into ~/.hermes/skills/ —\n"
+        "this installer does NOT install a skill for you on purpose).",
+        style="bold yellow",
+    )
     state.console.print(Panel(text, title="INSTALL SUMMARY", border_style="green"))
 
 
