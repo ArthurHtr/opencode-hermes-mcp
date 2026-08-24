@@ -76,15 +76,23 @@ print(f"CRED_PASS={shlex.quote(cfg['password'])}")
 PY
 )"
   log "waiting for server health ($CRED_URL/global/health, ~30s)..."
-  local healthy=0
+  local healthy=0 last_err="" curl_err
   for _ in $(seq 1 30); do
-    if curl -sf -u "$CRED_USER:$CRED_PASS" "$CRED_URL/global/health" >/dev/null 2>&1; then
+    if curl_err="$(curl -sSf --max-time 3 -u "$CRED_USER:$CRED_PASS" "$CRED_URL/global/health" 2>&1)"; then
       healthy=1
       break
+    else
+      last_err="curl exit $? — ${curl_err:-no output}"
     fi
     sleep 1
   done
-  [ "$healthy" -eq 1 ] || die "OpenCode server not healthy after 30s — check: systemctl --user status opencode-server"
+  if [ "$healthy" -ne 1 ]; then
+    if [ "$SANDBOX" -eq 0 ]; then
+      warn "diagnostic — systemctl --user status opencode-server:"
+      systemctl --user status opencode-server --no-pager || true
+    fi
+    die "OpenCode server not healthy after 30s (last error: $last_err) — check: systemctl --user status opencode-server"
+  fi
 }
 
 run_smoke() {
