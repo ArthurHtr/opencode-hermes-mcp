@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--skip-verify` flag for the installer: skips the final health + smoke
+  verification (step 9) — useful for sandbox/CI runs where no OpenCode
+  server is expected to come up.
+
+### Changed
+
+- **Installer rewritten as a Python + `rich` setup wizard**
+  (`opencode_hermes_mcp/installer.py`): banner, numbered steps, styled
+  prompts (API key never echoed), progress during long phases, and a final
+  summary panel (Installed / Already in place / Skipped + duration).
+  `scripts/install.sh` is now a thin wrapper that execs the wizard.
+  The wizard self-bootstraps: with a bare `python3` >= 3.11 it creates the
+  repo venv, installs `mcp==1.12.4` + `rich>=13` + `pyyaml>=6` + the
+  editable package, and re-execs itself. All flags, env vars, generated
+  files (opencode.json, credentials, launchers, systemd unit, Hermes config
+  patch) and the idempotent skip-if-present behavior are unchanged from the
+  former bash installer. `rich>=13` and `pyyaml>=6` are now package
+  dependencies.
+
 ### Fixed
 
 - `scripts/install.sh` (step 9) and `scripts/upgrade.sh` (`wait_health`): the
