@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/hermes-integration.md` — full manual for integrating the controller
+  with Hermes: what the MCP is for, the exact `~/.hermes/config.yaml` entry
+  the installer writes, manual (by-hand) integration, the six tools,
+  troubleshooting, uninstall.
+- `docs/skill.example.md` — ready-to-copy Hermes skill template (the
+  delegation protocol: agent choice, answering questions/permissions itself,
+  the no-poll rule, recovery). The installer deliberately does NOT install a
+  skill for you (Hermes's skill layout may change); adapt this template into
+  `~/.hermes/skills/` instead. The wizard's final summary now points to both
+  documents.
 - `--skip-verify` flag for the installer: skips the final health + smoke
   verification (step 9) — useful for sandbox/CI runs where no OpenCode
   server is expected to come up.
