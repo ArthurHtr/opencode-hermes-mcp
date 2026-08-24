@@ -8,7 +8,7 @@ No LLM, no inference. Responsibilities:
   * persist a small durable turn state so that answering a question or
     permission works even after the controller process restarts.
 
-Completion semantics (verified against live server 1.18.18 — see skill
+Completion semantics (verified against live server 1.18.21 — see skill
 reference mcp-controller.md):
   * /session/status (scoped) lists only ACTIVE sessions; absence = idle;
   * `session.idle` fires BETWEEN assistant messages too — NOT terminal;
@@ -46,7 +46,7 @@ DEFAULT_RUN_TIMEOUT = 3600.0
 # After we answer a question / decide a permission, if the session goes idle
 # and makes NO further progress (no busy period, no new assistant message) for
 # this long, the turn has been terminated by the interaction resolution — most
-# notably a permission REJECT, where OpenCode 1.18.18 ends the turn with the
+# notably a permission REJECT, where OpenCode 1.18.21 ends the turn with the
 # last assistant message still at finish='tool-calls' and no error. Without
 # this, the completion heuristic (finish != tool-calls) would wait forever.
 INTERACTION_STALL_GRACE_MS = 45_000
@@ -260,7 +260,7 @@ class Controller:
         # last assistant message is a non-terminal tool-calls tail, and there
         # is no error. That is the signature of a turn TERMINATED by the
         # interaction resolution — most notably a permission REJECT, where
-        # OpenCode 1.18.18 ends the turn leaving the last assistant message at
+        # OpenCode 1.18.21 ends the turn leaving the last assistant message at
         # finish='tool-calls' with no error and no new message. Without this,
         # the completion heuristic (finish != tool-calls) would wait forever.
         #
@@ -312,7 +312,7 @@ class Controller:
         msg_created = msg_created_ms(last)
 
         # An assistant message that errored is a terminal failure — EXCEPT an
-        # abort: OpenCode 1.18.18 marks the aborted message with
+        # abort: OpenCode 1.18.21 marks the aborted message with
         # error.name == "MessageAbortedError". That is a clean abort, not a
         # failure. (Handled here too, not just via the _aborted set, because
         # the SSE event from the abort can poke the wait loop before abort()
@@ -596,7 +596,7 @@ class Controller:
             # RESUME semantics. Authoritative signal that a turn is in flight
             # is the durable turn state (written at submission, cleared on
             # terminal). status_map is NOT reliable here: while another
-            # controller process holds the SSE stream it returns {} (1.18.18
+            # controller process holds the SSE stream it returns {} (1.18.21
             # quirk), so we must not use "not busy" alone to decide to
             # resubmit — that would wrongly send a NEW prompt onto a turn that
             # is still running (forbidden).

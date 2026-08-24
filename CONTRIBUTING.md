@@ -5,11 +5,12 @@ development setup, how to run the tests, and the contribution conventions.
 
 ## Version pin
 
-The controller is **validated against OpenCode `1.18.18` only** (its endpoint
-contract was verified against that binary's live `/doc`). `scripts/install.sh`
-pins the binary to `1.18.18`. If you test against a different OpenCode
-version, the controller's behaviour is NOT guaranteed — re-run the full
-integration suite and report any divergence.
+The pin is a **single source of truth** in `opencode_hermes_mcp/pin.txt`
+(one line, no `v` prefix). The controller is **validated against the pinned
+version only** (its endpoint contract was verified against that binary's live
+`/doc`). `scripts/install.sh` pins the binary to that version. If you test
+against a different OpenCode version, the controller's behaviour is NOT
+guaranteed — re-run the full integration suite and report any divergence.
 
 ## Development setup
 
@@ -57,7 +58,7 @@ by `scripts/install.sh`). The test directory defaults to
 
 ## Running the integration suite (live LLM)
 
-`tests/run_tests.py` is the reference integration suite (14 tests). It drives
+`tests/run_tests.py` is the reference integration suite (15 tests). It drives
 the controller over MCP stdio exactly like Hermes does, against a **live
 OpenCode server with a working LLM provider** — several tests run real LLM
 turns.
@@ -102,4 +103,5 @@ controller enforces it).
   CI (ruff + build + smoke) must pass.
 - **Controller logic**: changes to the controller's behaviour (state machine,
   completion heuristics, endpoint contract) MUST be validated against the
-  pinned OpenCode `1.18.18` with the full integration suite before merging.
+  pinned OpenCode version (`opencode_hermes_mcp/pin.txt`) with the full
+  integration suite before merging.

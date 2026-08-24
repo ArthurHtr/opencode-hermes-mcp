@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](#prerequisites)
-[![OpenCode](https://img.shields.io/badge/OpenCode-1.18.18%20(pinned)-brightgreen.svg)](#version-pin-opencode-11818)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.18.21%20(pinned)-brightgreen.svg)](#version-pin-opencode-11821)
 
 Deterministic MCP controller between **Hermes** (supervisor LLM) and the
 permanent **OpenCode** server. The controller is a state machine — no LLM —
@@ -201,14 +201,14 @@ scripts/uninstall.sh --purge-binary  # + the OpenCode binary
 `uninstall.sh` never touches the git clone, the OpenCode provider config, the
 API key secret, or the binary (unless the purge flags say so).
 
-## Version pin: OpenCode 1.18.18
+## Version pin: OpenCode 1.18.21
 
-The controller is **validated against OpenCode `1.18.18` only** (its endpoint
+The controller is **validated against OpenCode `1.18.21` only** (its endpoint
 contract was verified against that binary's live `/doc`, not the web docs).
 The pin is a **single source of truth** in `opencode_hermes_mcp/pin.txt`
 (one line, no `v` prefix): `installer.py` and `scripts/upgrade.sh` both read
-it, falling back to `1.18.18` when the file is missing or empty (e.g. pip
-installs where the file is not shipped next to the code). `install.sh` pins
+it, falling back to the built-in constant when the file is missing or empty
+(e.g. pip installs where the file is not shipped next to the code). `install.sh` pins
 the binary to that version; `upgrade.sh` never upgrades the binary by
 default.
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-24
+
 ### Added
 
 - `docs/hermes-integration.md` — full manual for integrating the controller
@@ -22,9 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--skip-verify` flag for the installer: skips the final health + smoke
   verification (step 9) — useful for sandbox/CI runs where no OpenCode
   server is expected to come up.
+- `opencode_hermes_mcp/pin.txt` is now shipped as package data
+  (`[tool.setuptools.package-data]`) so `pinned_version()` resolves the pin
+  even from a non-editable install.
 
 ### Changed
 
+- **OpenCode pin bumped 1.18.18 → 1.18.21.** The controller is re-validated
+  against the 1.18.21 binary: the live `/doc` (OpenAPI) is byte-identical to
+  1.18.18, and the full integration suite (15 tests, 44/44 checks, live LLM)
+  passes. No controller code change was required.
 - **Installer rewritten as a Python + `rich` setup wizard**
   (`opencode_hermes_mcp/installer.py`): banner, numbered steps, styled
   prompts (API key never echoed), progress during long phases, and a final
@@ -40,8 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The OpenCode pin is now a **single source of truth** in
   `opencode_hermes_mcp/pin.txt` (one line, no `v` prefix): `installer.py`
   (via `pinned_version()`) and `scripts/upgrade.sh` both read it, falling
-  back to `1.18.18` when the file is missing or empty (e.g. pip installs
-  where the file is not shipped next to the code).
+  back to the built-in constant when the file is missing or empty (e.g. pip
+  installs where the file is not shipped next to the code).
 - `scripts/upgrade.sh --binary` without a version now installs the validated
   PINNED version instead of the bleeding edge: it is idempotent (no-op when
   the binary is already at the pin) and aligns the binary on the pin

@@ -18,7 +18,7 @@ STATE_DIR = os.environ.get(
     os.path.join(os.path.expanduser("~"), ".local", "state", "opencode-hermes-mcp"),
 )
 
-# A root agent must have mode "primary" (observed on 1.18.18). "all" is
+# A root agent must have mode "primary" (observed on 1.18.21). "all" is
 # treated as usable-as-root too, in case a future version exposes it.
 ROOT_AGENT_MODES = {"primary", "all"}
 
@@ -129,7 +129,7 @@ def validate_question_answers(
     """Validate `answers` (one entry per sub-question, each a str or list[str])
     against the question's options.
 
-    OpenCode 1.18.18 rejects (400) any answer that is not an exact option
+    OpenCode 1.18.21 rejects (400) any answer that is not an exact option
     label when the sub-question has options and custom=false.
     """
     subqs = question.get("questions") or []

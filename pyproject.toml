@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opencode-hermes-mcp"
-version = "0.3.0"
-description = "Deterministic MCP controller between Hermes (supervisor LLM) and the permanent OpenCode server. OpenCode pin defined in opencode_hermes_mcp/pin.txt (currently 1.18.18)."
+version = "0.4.0"
+description = "Deterministic MCP controller between Hermes (supervisor LLM) and the permanent OpenCode server. OpenCode pin defined in opencode_hermes_mcp/pin.txt (currently 1.18.21)."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
@@ -45,3 +45,6 @@ Repository = "https://github.com/ArthurHtr/opencode-hermes-mcp"
 
 [tool.setuptools]
 packages = ["opencode_hermes_mcp"]
+
+[tool.setuptools.package-data]
+opencode_hermes_mcp = ["pin.txt"]

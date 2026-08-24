@@ -35,7 +35,7 @@ from typing import NoReturn
 # Fallback only — the single source of truth is opencode_hermes_mcp/pin.txt
 # (see pinned_version()). Needed for pip installs where pin.txt is not
 # shipped next to the code.
-OPENCODE_VERSION = "1.18.18"
+OPENCODE_VERSION = "1.18.21"
 MCP_VERSION = "1.12.4"
 BOOTSTRAP_DEPS = ["mcp==1.12.4", "rich>=13", "pyyaml>=6"]
 

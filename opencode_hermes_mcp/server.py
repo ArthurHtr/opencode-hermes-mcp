@@ -24,7 +24,7 @@ Tools (final surface):
 Credentials come from the environment (injected by the launcher):
   OPENCODE_SERVER_URL / OPENCODE_SERVER_USERNAME / OPENCODE_SERVER_PASSWORD
 
-Target: OpenCode 1.18.18. Endpoint contract = the live server's /doc,
+Target: OpenCode 1.18.21. Endpoint contract = the live server's /doc,
 verified against the installed binary — not the web docs.
 """
 

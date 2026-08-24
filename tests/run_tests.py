@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integration test suite for opencode-hermes-mcp (OpenCode 1.18.18 live).
+"""Integration test suite for opencode-hermes-mcp (OpenCode 1.18.21 live).
 
 Run (from the repo root):  .venv/bin/python tests/run_tests.py [name-filter]
 
@@ -160,7 +160,7 @@ async def newest_session(directory: str, since_ms: float) -> str | None:
 
     Used to identify a turn's session id without relying on /session/status
     (which returns {} while another controller process holds the SSE stream —
-    a 1.18.18 quirk; see references/mcp-controller.md).
+    a 1.18.21 quirk; see references/mcp-controller.md).
     """
     from opencode_hermes_mcp.client import OpenCode
 
@@ -625,7 +625,7 @@ async def test_sse_kill_and_restart():
     }, timeout_s=1200))
     # Deterministic 'turn is running' signal: wait for a mid-turn marker file
     # (kill_e.txt, step 5 of 10). Do NOT rely on /session/status — it returns
-    # {} while the controller process holds the SSE stream (1.18.18 quirk).
+    # {} while the controller process holds the SSE stream (1.18.21 quirk).
     running = await wait_file(REPO, "kill_e.txt", timeout_s=120)
     if not running:
         data, _ = await run_task
@@ -920,7 +920,7 @@ async def _kill_orphan_controllers() -> None:
     """Kill orphaned controller (server.py) processes from prior runs/tests.
 
     Each orphan holds an SSE stream; while a controller process is alive a
-    *separate* OpenCode client returns degraded data (1.18.18 quirk), which
+    *separate* OpenCode client returns degraded data (1.18.21 quirk), which
     breaks tests that fetch messages/status via their own client. The test
     process itself is run_tests.py, so this is safe.
     """

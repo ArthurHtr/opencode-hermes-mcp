@@ -8,3 +8,6 @@ __pycache__/
 build/
 dist/
 .sandbox/
+
+# Hermes campaign working notes (local only)
+.campaigns/

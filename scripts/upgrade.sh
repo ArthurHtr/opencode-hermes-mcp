@@ -25,7 +25,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # PINNED — the controller is validated against this OpenCode version only.
 # Single source of truth: opencode_hermes_mcp/pin.txt (fallback below).
 OPENCODE_VERSION="$(head -n1 "$REPO/opencode_hermes_mcp/pin.txt" 2>/dev/null | tr -d '[:space:]')"
-OPENCODE_VERSION="${OPENCODE_VERSION:-1.18.18}"
+OPENCODE_VERSION="${OPENCODE_VERSION:-1.18.21}"
 HOME_DIR="${OPENCODE_MCP_HOME:-$HOME}"
 SANDBOX=0
 [ "$HOME_DIR" != "$HOME" ] && SANDBOX=1
