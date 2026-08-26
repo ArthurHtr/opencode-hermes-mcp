@@ -167,6 +167,25 @@ The launcher reads the OpenCode server credentials from
 `python -m opencode_hermes_mcp.server` in the repo venv — `config.yaml` stays
 secret-free.
 
+## Delegation journal
+
+Every `opencode_run` is recorded in a durable, append-only JSONL journal so
+the delegation history survives sessions (the per-turn state file
+`turn_<sid>.json` is cleared on completion). One line per record:
+
+```json
+{"ts": 1787750000123, "kind": "start", "session_id": "ses_...", "directory": "/abs/repo", "agent": "build", "task": "...(truncated to 500 chars)"}
+{"ts": 1787750100456, "kind": "end", "session_id": "ses_...", "directory": "/abs/repo", "state": "completed|error|aborted|timeout", "elapsed_ms": 100333, "files": 12, "additions": 1209, "deletions": 18, "changed_files": ["a.py", "..."]}
+```
+
+- Path: `~/.local/state/opencode-hermes-mcp/delegations.jsonl` by default,
+  overridable with the `OPENCODE_HERMES_MCP_JOURNAL` env var.
+- `ts` is epoch milliseconds; `state` is the run's terminal state;
+  `changed_files` is truncated to 50 entries.
+- The journal is best-effort: a write failure (disk full, permissions) is
+  logged and swallowed — it never fails a run.
+- Read-only access for consumers: `opencode_hermes_mcp.journal.read_journal()`.
+
 ## TUI attach helpers (watch OpenCode live)
 
 `install.sh` also drops two helpers into `~/.local/bin/` (sources:
@@ -249,8 +268,10 @@ smoke test and the integration suite, and the contribution conventions.
 | `opencode_hermes_mcp/controller.py` | state machine: submit / wait / resume / classify |
 | `opencode_hermes_mcp/client.py` | HTTP + SSE client for the OpenCode server |
 | `opencode_hermes_mcp/models.py` | data helpers for turns / interactions |
+| `opencode_hermes_mcp/journal.py` | durable delegation journal (append-only JSONL) |
 | `opencode_hermes_mcp/smoke_client.py` | no-LLM smoke test (tool surface + basic calls) |
 | `tests/run_tests.py` | full integration suite (live LLM turns) |
+| `tests/test_journal.py` | journal unit tests (pytest) |
 | `opencode_hermes_mcp/installer.py` | setup wizard (Python + rich; self-bootstrapping venv) |
 | `opencode_hermes_mcp/pin.txt` | the OpenCode version pin (single source of truth, one line) |
 | `scripts/install.sh` / `uninstall.sh` / `upgrade.sh` | lifecycle (`install.sh` is a thin wrapper around the wizard) |
