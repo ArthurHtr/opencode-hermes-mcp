@@ -22,6 +22,7 @@ import os
 import time
 from typing import Any
 
+from . import journal
 from .client import OpenCode, OpenCodeError, event_stream
 from .models import (
     assistant_text,
@@ -621,7 +622,17 @@ class Controller:
                     turn["assistant_count_before"] = sum(
                         1 for m in pre if (m.get("info") or {}).get("role") == "assistant"
                     )
-                return await self._wait(turn, timeout)
+                journal.append_start(sid, directory, turn.get("agent"), task)
+                result = await self._wait(turn, timeout)
+                if result.get("state") in ("completed", "error", "aborted", "timeout"):
+                    diff = result.get("diff") or {}
+                    journal.append_end(
+                        sid, directory, result["state"],
+                        (result.get("timing") or {}).get("elapsed_ms"),
+                        diff.get("files"), diff.get("additions"), diff.get("deletions"),
+                        diff.get("changed_files"),
+                    )
+                return result
         else:
             try:
                 sess = await self.oc.create_session(
@@ -665,7 +676,17 @@ class Controller:
                 "error": f"failed to submit prompt: {exc}",
                 "session_id": sid,
             }
-        return await self._wait(turn, timeout)
+        journal.append_start(sid, directory, turn.get("agent"), task)
+        result = await self._wait(turn, timeout)
+        if result.get("state") in ("completed", "error", "aborted", "timeout"):
+            diff = result.get("diff") or {}
+            journal.append_end(
+                sid, directory, result["state"],
+                (result.get("timing") or {}).get("elapsed_ms"),
+                diff.get("files"), diff.get("additions"), diff.get("deletions"),
+                diff.get("changed_files"),
+            )
+        return result
 
     # ------------------------------------------------------------------ #
     # Resume primitives (answer / permission) — same turn, no resubmit

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Durable delegation journal (`opencode_hermes_mcp/journal.py`): every
+  `opencode_run` appends a `start` record (session resolved, before the wait)
+  and an `end` record (terminal state: completed / error / aborted / timeout,
+  with `elapsed_ms` + diff metrics) to an append-only JSONL file at
+  `~/.local/state/opencode-hermes-mcp/delegations.jsonl` (overridable via the
+  `OPENCODE_HERMES_MCP_JOURNAL` env var). The journal is best-effort — a write
+  failure is logged and swallowed and never fails a run.
+  `read_journal()` provides read-only access for consumers.
+- `tests/test_journal.py` unit tests (format, truncation, read, env override,
+  non-raise on unwritable path) and a `journal_records` integration test in
+  `tests/run_tests.py` (a run produces start + end).
+
 ## [0.4.1] - 2026-08-24
 
 ### Fixed
