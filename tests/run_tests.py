@@ -85,7 +85,9 @@ class ControllerHandle:
             self._stderr_log.close()
 
 
-async def spawn_controller(pid_file: str | None = None) -> ControllerHandle:
+async def spawn_controller(
+    pid_file: str | None = None, extra_env: dict[str, str] | None = None
+) -> ControllerHandle:
     """Spawn the controller as a stdio MCP subprocess (like Hermes does).
 
     The controller's stderr is redirected to a log file: ANY write to its
@@ -95,6 +97,8 @@ async def spawn_controller(pid_file: str | None = None) -> ControllerHandle:
     env = cfg_env()
     if pid_file:
         env["OPENCODE_MCP_PID_FILE"] = pid_file
+    if extra_env:
+        env.update(extra_env)
     stderr_path = "/tmp/oc-mcp-test/ctrl_stderr.log"
     os.makedirs(os.path.dirname(stderr_path), exist_ok=True)
     stderr_log = open(stderr_path, "ab")
@@ -292,6 +296,43 @@ async def test_run_normal():
             content = open(path).read()
             check("run: file content correct", "def add(a, b)" in content,
                   content[:100].replace("\n", " | "))
+    finally:
+        await session.close()
+
+
+async def test_journal_records():
+    """A run must produce a start + end record in the durable journal."""
+    from opencode_hermes_mcp import journal
+
+    jpath = "/tmp/oc-mcp-test/journal_test.jsonl"
+    if os.path.exists(jpath):
+        os.remove(jpath)
+    session = await spawn_controller(extra_env={"OPENCODE_HERMES_MCP_JOURNAL": jpath})
+    try:
+        data, _ = await call(session, "opencode_run", {
+            "directory": REPO, "agent": "tester",
+            "task": "Réponds uniquement par le mot JOURNAL_OK. Ne fais rien d'autre.",
+        }, timeout_s=300)
+        check("journal: run completed", data.get("state") == "completed",
+              f"state={data.get('state')} err={str(data.get('error'))[:150]}")
+        if data.get("state") != "completed":
+            return
+        sid = data["session_id"]
+        recs = [r for r in journal.read_journal(jpath) if r.get("session_id") == sid]
+        check("journal: start+end recorded for the run",
+              [r.get("kind") for r in recs] == ["start", "end"],
+              json.dumps(recs)[:250])
+        if len(recs) != 2:
+            return
+        start, end = recs
+        check("journal: start fields (ts/directory/agent/task)",
+              isinstance(start.get("ts"), int) and start.get("directory") == REPO
+              and start.get("agent") == "tester" and "JOURNAL_OK" in start.get("task", ""),
+              json.dumps(start)[:200])
+        check("journal: end fields (state/elapsed/ts)",
+              end.get("state") == "completed" and (end.get("elapsed_ms") or 0) > 0
+              and end.get("ts", 0) >= start.get("ts", 0),
+              json.dumps(end)[:200])
     finally:
         await session.close()
 
@@ -901,6 +942,7 @@ async def test_custom_agent_e2e():
 TESTS = [
     ("agent_validation", test_agent_validation),
     ("run_normal", test_run_normal),
+    ("journal_records", test_journal_records),
     ("question_flow", test_question_flow),
     ("question_invalid_answer", test_question_invalid_answer),
     ("multiple_questions", test_multiple_questions),
